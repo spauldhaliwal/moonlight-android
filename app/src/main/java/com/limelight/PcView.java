@@ -1,5 +1,6 @@
 package com.limelight;
 
+import android.util.Log;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.UnknownHostException;
@@ -542,10 +543,10 @@ public class PcView extends Activity implements AdapterFragmentCallbacks {
     }
 
     private void doAppList(ComputerDetails computer, boolean newlyPaired) {
-        if (computer.state == ComputerDetails.State.OFFLINE) {
-            Toast.makeText(PcView.this, getResources().getString(R.string.error_pc_offline), Toast.LENGTH_SHORT).show();
-            return;
-        }
+//        if (computer.state == ComputerDetails.State.OFFLINE) {
+//            Toast.makeText(PcView.this, getResources().getString(R.string.error_pc_offline), Toast.LENGTH_SHORT).show();
+//            return;
+//        }
         if (managerBinder == null) {
             Toast.makeText(PcView.this, getResources().getString(R.string.error_manager_not_running), Toast.LENGTH_LONG).show();
             return;
@@ -705,14 +706,17 @@ public class PcView extends Activity implements AdapterFragmentCallbacks {
             public void onItemClick(AdapterView<?> arg0, View arg1, int pos,
                                     long id) {
                 ComputerObject computer = (ComputerObject) pcGridAdapter.getItem(pos);
-                if (computer.details.state == ComputerDetails.State.UNKNOWN ||
+                if (1>0 && computer.details.state == ComputerDetails.State.UNKNOWN ||
                     computer.details.state == ComputerDetails.State.OFFLINE) {
                     // Open the context menu if a PC is offline or refreshing
-                    openContextMenu(arg1);
+                    Log.d("PcView", "pc is offline...");
+//                    openContextMenu(arg1);
+                    doAppList(computer.details, false);
                 } else if (computer.details.pairState != PairState.PAIRED) {
                     // Pair an unpaired machine by default
                     doPair(computer.details);
                 } else {
+                    Log.d("PcView", "should show app list...");
                     doAppList(computer.details, false);
                 }
             }

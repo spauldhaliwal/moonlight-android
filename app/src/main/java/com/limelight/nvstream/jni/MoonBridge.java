@@ -147,7 +147,7 @@ public class MoonBridge {
         }
     }
 
-    public static void bridgeClRumble(short controllerNumber, short lowFreqMotor, short highFreqMotor) {
+    public static void bridgeClRumble(int controllerNumber, int lowFreqMotor, int highFreqMotor) {
         if (connectionListener != null) {
             connectionListener.rumble(controllerNumber, lowFreqMotor, highFreqMotor);
         }

@@ -836,7 +836,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             }
 
             if (message != null) {
-                Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+//                Toast.makeText(this, message, Toast.LENGTH_LONG).show();
             }
 
             // Clear the tombstone count if we terminated normally
@@ -1514,7 +1514,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     }
 
     @Override
-    public void rumble(short controllerNumber, short lowFreqMotor, short highFreqMotor) {
+    public void rumble(int controllerNumber, int lowFreqMotor, int highFreqMotor) {
         LimeLog.info(String.format((Locale)null, "Rumble on gamepad %d: %04x %04x", controllerNumber, lowFreqMotor, highFreqMotor));
 
         controllerHandler.handleRumble(controllerNumber, lowFreqMotor, highFreqMotor);

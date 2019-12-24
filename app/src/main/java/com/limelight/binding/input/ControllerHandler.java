@@ -1102,6 +1102,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     }
 
     private void toggleMouseEmulation(final GenericControllerContext context) {
+        // TODO change this functionality to add popup menu
         if (context.mouseEmulationTimer != null) {
             context.mouseEmulationTimer.cancel();
             context.mouseEmulationTimer = null;
@@ -1123,7 +1124,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         }
     }
 
-    private void rumbleVibrator(Vibrator vibrator, short lowFreqMotor, short highFreqMotor) {
+    private void rumbleVibrator(Vibrator vibrator, int lowFreqMotor, int highFreqMotor) {
         // Since we can only use a single amplitude value, compute the desired amplitude
         // by taking 80% of the big motor and 33% of the small motor, then capping to 255.
         // NB: This value is now 0-255 as required by VibrationEffect.
@@ -1169,7 +1170,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         }
     }
 
-    public void handleRumble(short controllerNumber, short lowFreqMotor, short highFreqMotor) {
+    public void handleRumble(int controllerNumber, int lowFreqMotor, int highFreqMotor) {
         boolean foundMatchingDevice = false;
         boolean vibrated = false;
 

@@ -68,12 +68,15 @@ public class ServerHelper {
 
     public static void doStart(Activity parent, NvApp app, ComputerDetails computer,
                                ComputerManagerService.ComputerManagerBinder managerBinder) {
-        if (computer.state == ComputerDetails.State.OFFLINE ||
-                ServerHelper.getCurrentAddressFromComputer(computer) == null) {
-            Toast.makeText(parent, parent.getResources().getString(R.string.pair_pc_offline), Toast.LENGTH_SHORT).show();
-            return;
-        }
-        parent.startActivity(createStartIntent(parent, app, computer, managerBinder));
+        /**
+         * Removed below OFFLINE check as Shortcut Trampoline (started by createAppShortcutIntent) already checks.
+         */
+//        if (computer.state == ComputerDetails.State.OFFLINE ||
+//                ServerHelper.getCurrentAddressFromComputer(computer) == null) {
+//            Toast.makeText(parent, parent.getResources().getString(R.string.pair_pc_offline), Toast.LENGTH_SHORT).show();
+//            return;
+//        }
+        parent.startActivity(createAppShortcutIntent(parent, computer, app));
     }
 
     public static void doQuit(final Activity parent,

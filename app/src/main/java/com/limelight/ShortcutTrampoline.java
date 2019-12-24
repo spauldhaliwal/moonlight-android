@@ -8,16 +8,20 @@ import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.IBinder;
 
+import android.util.Log;
+import android.widget.Toast;
 import com.limelight.computers.ComputerManagerListener;
 import com.limelight.computers.ComputerManagerService;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
 import com.limelight.nvstream.http.PairingManager;
+import com.limelight.nvstream.wol.WakeOnLanSender;
 import com.limelight.utils.Dialog;
 import com.limelight.utils.ServerHelper;
 import com.limelight.utils.SpinnerDialog;
 import com.limelight.utils.UiHelper;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.UUID;
 
@@ -28,6 +32,8 @@ public class ShortcutTrampoline extends Activity {
 
     private ComputerDetails computer;
     private SpinnerDialog blockingLoadSpinner;
+
+    private Boolean wakingUpComputer = false;
 
     private ComputerManagerService.ComputerManagerBinder managerBinder;
     private final ServiceConnection serviceConnection = new ServiceConnection() {
@@ -75,6 +81,7 @@ public class ShortcutTrampoline extends Activity {
                         @Override
                         public void notifyComputerUpdated(final ComputerDetails details) {
                             // Don't care about other computers
+                            Log.d("ShortcutTrampoline","computer updated");
                             if (!details.uuid.equalsIgnoreCase(uuidString)) {
                                 return;
                             }
@@ -97,7 +104,9 @@ public class ShortcutTrampoline extends Activity {
                                         }
 
                                         if (details.state == ComputerDetails.State.ONLINE && details.pairState == PairingManager.PairState.PAIRED) {
-                                            
+                                            wakingUpComputer = false;
+                                            Log.d("ShortcutTrampoline","computer online and paired");
+
                                             // Launch game if provided app ID, otherwise launch app view
                                             if (app != null) {
                                                 if (details.runningGameId == 0 || details.runningGameId == app.getAppId()) {
@@ -160,11 +169,11 @@ public class ShortcutTrampoline extends Activity {
                                             
                                         }
                                         else if (details.state == ComputerDetails.State.OFFLINE) {
-                                            // Computer offline - display an error dialog
-                                            Dialog.displayDialog(ShortcutTrampoline.this,
-                                                    getResources().getString(R.string.conn_error_title),
-                                                    getResources().getString(R.string.error_pc_offline),
-                                                    true);
+
+                                            // If computer is offline we will send WOL request.
+                                            wakingUpComputer = true;
+                                            doWakeOnLan(details);
+                                            managerBinder.invalidateStateForComputer(computer.uuid);
                                         } else if (details.pairState != PairingManager.PairState.PAIRED) {
                                             // Computer not paired - display an error dialog
                                             Dialog.displayDialog(ShortcutTrampoline.this,
@@ -175,7 +184,7 @@ public class ShortcutTrampoline extends Activity {
 
                                         // We don't want any more callbacks from now on, so go ahead
                                         // and unbind from the service
-                                        if (managerBinder != null) {
+                                        if (managerBinder != null && !wakingUpComputer) {
                                             managerBinder.stopPolling();
                                             unbindService(serviceConnection);
                                             managerBinder = null;
@@ -273,5 +282,38 @@ public class ShortcutTrampoline extends Activity {
         }
 
         finish();
+    }
+
+    private void doWakeOnLan(final ComputerDetails computer) {
+        if (computer.state == ComputerDetails.State.ONLINE) {
+            Toast.makeText(ShortcutTrampoline.this, getResources().getString(R.string.wol_pc_online), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (computer.macAddress == null) {
+            Toast.makeText(ShortcutTrampoline.this, getResources().getString(R.string.wol_no_mac), Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String message;
+                try {
+                    WakeOnLanSender.sendWolPacket(computer);
+                    message = getResources().getString(R.string.wol_waking_msg);
+                } catch (IOException e) {
+                    message = getResources().getString(R.string.wol_fail);
+                }
+
+                final String toastMessage = message;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Toast.makeText(ShortcutTrampoline.this, toastMessage, Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        }).start();
     }
 }

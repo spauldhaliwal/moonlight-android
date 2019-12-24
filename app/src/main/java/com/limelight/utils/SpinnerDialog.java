@@ -77,7 +77,7 @@ public class SpinnerDialog implements Runnable,OnCancelListener {
         {
             progress = new ProgressDialog(activity);
 
-            progress.setTitle(title);
+            progress.setTitle("suh dude...");
             progress.setMessage(message);
             progress.setProgressStyle(ProgressDialog.STYLE_SPINNER);
             progress.setOnCancelListener(this);

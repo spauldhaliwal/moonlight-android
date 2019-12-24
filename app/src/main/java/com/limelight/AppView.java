@@ -1,5 +1,7 @@
 package com.limelight;
 
+import android.util.Log;
+import android.view.Display;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.List;
@@ -187,19 +189,24 @@ public class AppView extends Activity implements AdapterFragmentCallbacks {
                     return;
                 }
 
-                if (details.state == ComputerDetails.State.OFFLINE) {
-                    // The PC is unreachable now
-                    AppView.this.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            // Display a toast to the user and quit the activity
-                            Toast.makeText(AppView.this, getResources().getText(R.string.lost_connection), Toast.LENGTH_SHORT).show();
-                            finish();
-                        }
-                    });
-
-                    return;
-                }
+                /**
+                 * Removed below functionality which automatically closes activity when computer is offline.
+                 * Intention is to automatically wake the computer up when a game is select & PC is offline.
+                 */
+//                if (details.state == ComputerDetails.State.OFFLINE) {
+//                    // The PC is unreachable now
+//
+//                    AppView.this.runOnUiThread(new Runnable() {
+//                        @Override
+//                        public void run() {
+//                            Toast.makeText(AppView.this, "PC is offline.", Toast.LENGTH_SHORT).show();
+////                             Display a toast to the user and quit the activity
+//                            finish();
+//                        }
+//                    });
+//
+//                    return;
+//                }
 
                 // Close immediately if the PC is no longer paired
                 if (details.state == ComputerDetails.State.ONLINE && details.pairState != PairingManager.PairState.PAIRED) {
@@ -572,7 +579,6 @@ public class AppView extends Activity implements AdapterFragmentCallbacks {
             public void onItemClick(AdapterView<?> arg0, View arg1, int pos,
                                     long id) {
                 AppObject app = (AppObject) appGridAdapter.getItem(pos);
-
                 // Only open the context menu if something is running, otherwise start it
                 if (lastRunningAppId != 0) {
                     openContextMenu(arg1);
