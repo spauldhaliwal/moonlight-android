@@ -1,10 +1,12 @@
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android-extensions'
+apply plugin: 'kotlin-android'
 
 android {
     compileSdkVersion 29
 
     defaultConfig {
-        minSdkVersion 16
+        minSdkVersion 26
         targetSdkVersion 29
 
         versionName "8.7"
@@ -120,4 +122,22 @@ dependencies {
     implementation 'com.squareup.okhttp3:okhttp:3.12.3'
     implementation 'com.squareup.okio:okio:1.17.4'
     implementation 'org.jmdns:jmdns:3.5.5'
+
+    implementation 'androidx.core:core:1.0.0'
+    implementation 'androidx.media:media:1.0.0'
+    implementation "androidx.constraintlayout:constraintlayout:2.0.0-beta4"
+    implementation 'androidx.core:core-ktx:+'
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+
+    implementation 'jp.wasabeef:blurry:3.0.0'
+    implementation 'io.alterac.blurkit:blurkit:1.1.0'
+
+    implementation 'com.google.android.material:material:1.2.0-alpha03'
+
+    implementation 'androidx.tvprovider:tvprovider:1.0.0'
+
+}
+repositories {
+    maven { url "https://jitpack.io" }
+    mavenCentral()
 }

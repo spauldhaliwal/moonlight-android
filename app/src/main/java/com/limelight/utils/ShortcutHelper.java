@@ -90,10 +90,15 @@ public class ShortcutHelper {
         }
     }
 
-    public void reportGameLaunched(ComputerDetails computer, NvApp app) {
+    public void reportGameAdded(ComputerDetails computer, NvApp app) {
         tvChannelHelper.createTvChannel(computer);
         tvChannelHelper.addGameToChannel(computer, app);
     }
+
+    public void reportGameLaunched(ComputerDetails computer, NvApp app) {
+        tvChannelHelper.addGameToWatchNext(computer, app);
+    }
+
 
     public void createAppViewShortcut(ComputerDetails computer, boolean forceAdd, boolean newlyPaired) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {

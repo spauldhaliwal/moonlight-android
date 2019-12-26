@@ -1,6 +1,12 @@
 package com.limelight;
 
 
+import static android.content.ContentValues.TAG;
+
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.util.Log;
 import com.limelight.binding.PlatformBinding;
 import com.limelight.binding.input.ControllerHandler;
 import com.limelight.binding.input.KeyboardTranslator;
@@ -117,6 +123,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private boolean grabComboDown = false;
     private StreamView streamView;
 
+    private MediaSessionCompat mSession;
+    private String appTitle;
+
     private boolean isHidingOverlays;
     private TextView notificationOverlayView;
     private int requestedNotificationOverlayVisibility = View.GONE;
@@ -157,6 +166,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Log.d("GameActivity", "started");
 
         UiHelper.setLocale(this);
 
@@ -282,6 +292,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         if (appName != null) {
             // This may be null if launched from the "Resume Session" PC context menu item
             shortcutHelper.reportGameLaunched(computer, new NvApp(appName, appId, willStreamHdr));
+
+            appTitle = appName;
         }
 
         // Initialize the MediaCodec helper before creating the decoder
@@ -569,6 +581,22 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
     }
 
+    private void initializeMediaSession() {
+        mSession = new MediaSessionCompat(this, TAG);
+        mSession.setFlags(
+                MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS
+                        | MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        mSession.setActive(true);
+        MediaControllerCompat.setMediaController(this, mSession.getController());
+
+        // Set title for PIP
+        MediaMetadataCompat metadata = new MediaMetadataCompat.Builder()
+                .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, appTitle)
+                .build();
+        mSession.setMetadata(metadata);
+    }
+
+
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
@@ -798,6 +826,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         SpinnerDialog.closeDialogs(this);
         Dialog.closeDialogs();
+
+        mSession.release();
+        mSession = null;
 
         if (virtualController != null) {
             virtualController.hide();
@@ -1455,6 +1486,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 }
             }
         });
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        initializeMediaSession();
     }
 
     @Override

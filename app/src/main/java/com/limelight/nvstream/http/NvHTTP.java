@@ -1,5 +1,6 @@
 package com.limelight.nvstream.http;
 
+import android.util.Log;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -535,14 +536,18 @@ public class NvHTTP {
         }
         
         // Ensure that all apps in the list are initialized
+        // Remove any apps that don't end with _shield (removes duplicate entries)
         ListIterator<NvApp> i = appList.listIterator();
         while (i.hasNext()) {
             NvApp app = i.next();
             
             // Remove uninitialized apps
-            if (!app.isInitialized()) {
+            if (!app.isInitialized() || !app.getAppName().contains("_shield")) {
                 LimeLog.warning("GFE returned incomplete app: "+app.getAppId()+" "+app.getAppName());
                 i.remove();
+                // Remove _shield from app titles
+            } else if (app.getAppName().contains("_shield")) {
+                app.setAppName(app.getAppName().replace("_shield",""));
             }
         }
         

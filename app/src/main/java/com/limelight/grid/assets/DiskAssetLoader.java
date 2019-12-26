@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.ImageDecoder;
 import android.os.Build;
 
+import android.widget.TextView;
 import com.limelight.LimeLog;
 import com.limelight.utils.CacheHelper;
 
@@ -16,12 +17,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 public class DiskAssetLoader {
-    // 5 MB
-    private static final long MAX_ASSET_SIZE = 5 * 1024 * 1024;
+    // 20 MB
+    private static final long MAX_ASSET_SIZE = 20 * 1024 * 1024;
 
     // Standard box art is 300x400
-    private static final int STANDARD_ASSET_WIDTH = 300;
-    private static final int STANDARD_ASSET_HEIGHT = 400;
+    private static final int STANDARD_ASSET_WIDTH = 900;
+    private static final int STANDARD_ASSET_HEIGHT = 1200;
 
     private final boolean isLowRamDevice;
     private final File cacheDir;

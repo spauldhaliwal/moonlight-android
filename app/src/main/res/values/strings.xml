@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_label" translatable="false">Moonlight</string>
+    <string name="app_title" translatable="false">Moonlight</string>
     <string name="app_label_root" translatable="false">Moonlight (Root)</string>
 
     <!-- Shortcut strings -->
@@ -62,7 +62,7 @@
     <string name="unable_to_pin_shortcut">Your current launcher does not allow for creating pinned shortcuts.</string>
 
     <!-- Start application messages -->
-    <string name="conn_establishing_title">Establishing Connection</string>
+    <string name="conn_establishing_title">Connecting</string>
     <string name="conn_establishing_msg">Starting connection</string>
     <string name="conn_metered">Warning: Your active network connection is metered!</string>
     <string name="conn_client_latency">Average frame decoding latency:</string>

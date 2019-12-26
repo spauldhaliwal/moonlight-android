@@ -58,4 +58,9 @@ public class NvApp {
     public boolean isInitialized() {
         return this.initialized;
     }
+
+    @Override
+    public String toString() {
+        return getAppName();
+    }
 }

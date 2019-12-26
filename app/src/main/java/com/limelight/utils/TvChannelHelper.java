@@ -15,23 +15,35 @@ import android.graphics.drawable.Drawable;
 import android.media.tv.TvContract;
 import android.net.Uri;
 import android.os.Build;
-
+import android.provider.BaseColumns;
+import androidx.tvprovider.media.tv.TvContractCompat;
+import androidx.tvprovider.media.tv.TvContractCompat.PreviewProgramColumns;
+import androidx.tvprovider.media.tv.TvContractCompat.WatchNextPrograms;
+import androidx.tvprovider.media.tv.WatchNextProgram;
 import com.limelight.LimeLog;
 import com.limelight.PosterContentProvider;
 import com.limelight.R;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
-
 import java.io.IOException;
 import java.io.OutputStream;
 
 public class TvChannelHelper {
 
     private static final int ASPECT_RATIO_MOVIE_POSTER = 5;
+
     private static final int TYPE_GAME = 12;
+
     private static final int INTERNAL_PROVIDER_ID_INDEX = 1;
+
     private static final int PROGRAM_BROWSABLE_INDEX = 2;
+
+    private static final String[] WATCH_NEXT_MAP_PROJECTION =
+            {BaseColumns._ID, TvContractCompat.WatchNextPrograms.COLUMN_INTERNAL_PROVIDER_ID,
+                    TvContractCompat.WatchNextPrograms.COLUMN_BROWSABLE};
+
     private static final int ID_INDEX = 0;
+
     private Activity context;
 
     public TvChannelHelper(Activity context) {
@@ -66,7 +78,7 @@ public class TvChannelHelper {
 
             ChannelBuilder builder = new ChannelBuilder()
                     .setType(TvContract.Channels.TYPE_PREVIEW)
-                    .setDisplayName(computer.name)
+                    .setDisplayName("Your Games")
                     .setInternalProviderId(computer.uuid)
                     .setAppLinkIntent(ServerHelper.createPcShortcutIntent(context, computer));
 
@@ -120,7 +132,6 @@ public class TvChannelHelper {
                 return;
             }
 
-
             Long channelId = getChannelId(computer.uuid);
             if (channelId == null) {
                 return;
@@ -131,13 +142,13 @@ public class TvChannelHelper {
                     .setType(TYPE_GAME)
                     .setTitle(app.getAppName())
                     .setPosterArtAspectRatio(ASPECT_RATIO_MOVIE_POSTER)
-                    .setPosterArtUri(PosterContentProvider.createBoxArtUri(computer.uuid, ""+app.getAppId()))
+                    .setPosterArtUri(PosterContentProvider.createBoxArtUri(computer.uuid, "" + app.getAppId()))
                     .setIntent(ServerHelper.createAppShortcutIntent(context, computer, app))
-                    .setInternalProviderId(""+app.getAppId())
+                    .setInternalProviderId("" + app.getAppId())
                     // Weight should increase each time we run the game
-                    .setWeight((int)((System.currentTimeMillis() - 1500000000000L) / 1000));
+                    .setWeight((int) ((System.currentTimeMillis() - 1500000000000L) / 1000));
 
-            Long programId = getProgramId(channelId, ""+app.getAppId());
+            Long programId = getProgramId(channelId, "" + app.getAppId());
             if (programId != null) {
                 context.getContentResolver().update(TvContract.buildPreviewProgramUri(programId),
                         builder.toContentValues(), null, null);
@@ -148,6 +159,48 @@ public class TvChannelHelper {
                     builder.toContentValues());
 
             TvContract.requestChannelBrowsable(context, channelId);
+        }
+    }
+
+    void addGameToWatchNext(ComputerDetails computer, NvApp app) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!isAndroidTV()) {
+                return;
+            }
+
+            Long channelId = getChannelId(computer.uuid);
+            if (channelId == null) {
+                return;
+            }
+
+            WatchNextProgram.Builder builder = new WatchNextProgram.Builder();
+            builder.setType(WatchNextPrograms.TYPE_GAME)
+                    .setWatchNextType(TvContractCompat.WatchNextPrograms.WATCH_NEXT_TYPE_CONTINUE)
+                    .setLastEngagementTimeUtcMillis(System.currentTimeMillis())
+                    .setTitle(app.getAppName())
+                    .setPosterArtAspectRatio(PreviewProgramColumns.ASPECT_RATIO_MOVIE_POSTER)
+                    .setPosterArtUri(PosterContentProvider.createBoxArtUri(computer.uuid, "" + app.getAppId()))
+                    .setIntent(ServerHelper.createAppShortcutIntent(context, computer, app))
+                    .setInternalProviderId("" + app.getAppId());
+
+            ContentValues contentValues = builder.build().toContentValues();
+            Long watchNextId = getWatchNextProgramId(app.getAppId());
+
+            if (watchNextId != null) {
+                int updatedRowCount = context.getContentResolver()
+                        .update(TvContractCompat.buildWatchNextProgramUri(watchNextId),
+                                contentValues,
+                                null,
+                                null);
+
+                if (updatedRowCount < 1) {
+                    context.getContentResolver()
+                            .insert(TvContractCompat.WatchNextPrograms.CONTENT_URI, contentValues);
+                }
+            } else {
+                context.getContentResolver()
+                        .insert(TvContractCompat.WatchNextPrograms.CONTENT_URI, contentValues);
+            }
         }
     }
 
@@ -177,8 +230,7 @@ public class TvChannelHelper {
                 return;
             }
 
-
-            Long programId = getProgramId(channelId, ""+app.getAppId());
+            Long programId = getProgramId(channelId, "" + app.getAppId());
             if (programId == null) {
                 return;
             }
@@ -191,7 +243,7 @@ public class TvChannelHelper {
     private Long getChannelId(String computerUuid) {
         try (Cursor cursor = context.getContentResolver().query(
                 TvContract.Channels.CONTENT_URI,
-                new String[] {TvContract.Channels._ID, TvContract.Channels.COLUMN_INTERNAL_PROVIDER_ID},
+                new String[]{TvContract.Channels._ID, TvContract.Channels.COLUMN_INTERNAL_PROVIDER_ID},
                 null,
                 null,
                 null)) {
@@ -213,7 +265,8 @@ public class TvChannelHelper {
     private Long getProgramId(long channelId, String appId) {
         try (Cursor cursor = context.getContentResolver().query(
                 TvContract.buildPreviewProgramsUriForChannel(channelId),
-                new String[] {TvContract.PreviewPrograms._ID, TvContract.PreviewPrograms.COLUMN_INTERNAL_PROVIDER_ID, TvContract.PreviewPrograms.COLUMN_BROWSABLE},
+                new String[]{TvContract.PreviewPrograms._ID, TvContract.PreviewPrograms.COLUMN_INTERNAL_PROVIDER_ID,
+                        TvContract.PreviewPrograms.COLUMN_BROWSABLE},
                 null,
                 null,
                 null)) {
@@ -228,7 +281,40 @@ public class TvChannelHelper {
                     if (browsable != 0) {
                         return id;
                     } else {
-                        int countDeleted = context.getContentResolver().delete(TvContract.buildPreviewProgramUri(id), null, null);
+                        int countDeleted = context.getContentResolver()
+                                .delete(TvContract.buildPreviewProgramUri(id), null, null);
+                        if (countDeleted > 0) {
+                            LimeLog.info("Preview program has been deleted");
+                        } else {
+                            LimeLog.warning("Preview program has not been deleted");
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+    }
+
+    @TargetApi(Build.VERSION_CODES.O)
+    private Long getWatchNextProgramId(int appId) {
+        try (Cursor cursor = context.getContentResolver().query(
+                TvContractCompat.WatchNextPrograms.CONTENT_URI, WATCH_NEXT_MAP_PROJECTION, null,
+                null, null)) {
+            if (cursor == null || cursor.getCount() == 0) {
+                return null;
+            }
+            while (cursor.moveToNext()) {
+                String internalProviderId = cursor.getString(INTERNAL_PROVIDER_ID_INDEX);
+                String appIdStr = Integer.toString(appId);
+                if (appIdStr.equals(internalProviderId)) {
+                    long id = cursor.getLong(ID_INDEX);
+                    int browsable = cursor.getInt(PROGRAM_BROWSABLE_INDEX);
+                    if (browsable != 0) {
+                        return id;
+                    } else {
+                        int countDeleted = context.getContentResolver()
+                                .delete(TvContract.buildPreviewProgramUri(id), null, null);
                         if (countDeleted > 0) {
                             LimeLog.info("Preview program has been deleted");
                         } else {

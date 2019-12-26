@@ -2,9 +2,11 @@ package com.limelight.grid.assets;
 
 import android.content.res.Resources;
 import android.graphics.Bitmap;
+import android.graphics.Bitmap.Config;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
@@ -12,12 +14,14 @@ import android.widget.ProgressBar;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
 
+import io.alterac.blurkit.BlurKit;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import jp.wasabeef.blurry.Blurry;
 
 public class CachedAppAssetLoader {
     private static final int MAX_CONCURRENT_DISK_LOADS = 3;
@@ -90,6 +94,49 @@ public class CachedAppAssetLoader {
     }
 
     private Bitmap doNetworkAssetLoad(LoaderTuple tuple, LoaderTask task) {
+        // Try 3 times
+        for (int i = 0; i < 3; i++) {
+            // Check again whether we've been cancelled or the image view is gone
+            if (task != null && (task.isCancelled() || task.imageViewRef.get() == null)) {
+                return null;
+            }
+
+            InputStream in = networkLoader.getBitmapStream(tuple);
+            if (in != null) {
+                // Write the stream straight to disk
+                diskLoader.populateCacheWithStream(tuple, in);
+
+                // Close the network input stream
+                try {
+                    in.close();
+                } catch (IOException ignored) {}
+
+                // If there's a task associated with this load, we should return the bitmap
+                if (task != null) {
+                    // If the cached bitmap is valid, return it. Otherwise, we'll try the load again
+                    Bitmap bmp = diskLoader.loadBitmapFromCache(tuple, (int) scalingDivider);
+                    if (bmp != null) {
+                        return bmp;
+                    }
+                }
+                else {
+                    // Otherwise it's a background load and we return nothing
+                    return null;
+                }
+            }
+
+            // Wait 1 second with a bit of fuzz
+            try {
+                Thread.sleep((int) (1000 + (Math.random() * 500)));
+            } catch (InterruptedException e) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private Bitmap doNetworkAssetLoadSoft(LoaderTuple tuple, LoaderTaskSoft task) {
         // Try 3 times
         for (int i = 0; i < 3; i++) {
             // Check again whether we've been cancelled or the image view is gone
@@ -226,6 +273,116 @@ public class CachedAppAssetLoader {
         }
     }
 
+    private class LoaderTaskSoft extends AsyncTask<LoaderTuple, Void, Bitmap> {
+        private final WeakReference<ImageView> imageViewRef;
+        private final WeakReference<ProgressBar> progressViewRef;
+        private final boolean diskOnly;
+        private boolean blurOnEnd;
+
+        private LoaderTuple tuple;
+
+        public LoaderTaskSoft(ImageView imageView, ProgressBar prgView, boolean diskOnly, boolean blurOnEnd) {
+            this.imageViewRef = new WeakReference<>(imageView);
+            this.progressViewRef = new WeakReference<>(prgView);
+            this.diskOnly = diskOnly;
+            this.blurOnEnd = blurOnEnd;
+        }
+
+        @Override
+        protected Bitmap doInBackground(LoaderTuple... params) {
+            Log.d("AssetLoader", "doInBackgroundSoft");
+            tuple = params[0];
+
+            // Check whether it has been cancelled or the views are gone
+            if (isCancelled() || imageViewRef.get() == null || progressViewRef.get() == null) {
+                return null;
+            }
+
+            Bitmap bmp = diskLoader.loadBitmapFromCache(tuple, (int) scalingDivider);
+            if (bmp == null) {
+                if (!diskOnly) {
+                    // Try to load the asset from the network
+                    bmp = doNetworkAssetLoadSoft(tuple, this);
+                } else {
+                    // Report progress to display the placeholder and spin
+                    // off the network-capable task
+                    publishProgress();
+                }
+            }
+
+            // Cache the bitmap
+            if (bmp != null) {
+                memoryLoader.populateCache(tuple, bmp);
+            }
+
+            Bitmap sftbmp = bmp.copy(Config.RGB_565, true);
+
+            return sftbmp;
+        }
+
+        @Override
+        protected void onProgressUpdate(Void... nothing) {
+            // Do nothing if cancelled
+            if (isCancelled()) {
+                return;
+            }
+
+            // If the current loader task for this view isn't us, do nothing
+            final ImageView imageView = imageViewRef.get();
+            final ProgressBar prgView = progressViewRef.get();
+            if (getLoaderTaskSoft(imageView) == this) {
+                // Now display the progress bar since we have to hit the network
+                if (prgView != null) {
+                    prgView.setVisibility(View.VISIBLE);
+                }
+
+                // Set off another loader task on the network executor. This time our AsyncDrawable
+                // will use the app image placeholder bitmap, rather than an empty bitmap.
+                LoaderTaskSoft task = new LoaderTaskSoft(imageView, prgView, false, blurOnEnd);
+                AsyncDrawableSoft asyncDrawable = new AsyncDrawableSoft(imageView.getResources(), noAppImageBitmap, task);
+                imageView.setVisibility(View.VISIBLE);
+                imageView.setImageDrawable(asyncDrawable);
+                task.executeOnExecutor(networkExecutor, tuple);
+            }
+        }
+
+        @Override
+        protected void onPostExecute(Bitmap bitmap) {
+            // Do nothing if cancelled
+            if (isCancelled()) {
+                return;
+            }
+
+            final ImageView imageView = imageViewRef.get();
+            final ProgressBar prgView = progressViewRef.get();
+            if (getLoaderTaskSoft(imageView) == this) {
+                // Set the bitmap
+                if (bitmap != null) {
+                    if (blurOnEnd) {
+                        Log.d("CachedAppAssetLoader", "set image with blur");
+                        Blurry.with(imageView.getContext())
+                                .radius(20)
+                                .sampling(8)
+                                .async()
+                                .from(bitmap)
+                                .into(imageView);
+                    } else {
+                        Log.d("CachedAppAssetLoader", "set image without blur");
+                        imageView.setImageBitmap(bitmap);
+                    }
+                }
+
+                // Hide the progress bar
+                if (prgView != null) {
+                    prgView.setVisibility(View.INVISIBLE);
+                }
+
+                // Show the view
+                imageView.setVisibility(View.VISIBLE);
+            }
+        }
+    }
+
     static class AsyncDrawable extends BitmapDrawable {
         private final WeakReference<LoaderTask> loaderTaskReference;
 
@@ -239,6 +396,37 @@ public class CachedAppAssetLoader {
             return loaderTaskReference.get();
         }
     }
+
+    static class AsyncDrawableSoft extends BitmapDrawable {
+        private final WeakReference<LoaderTaskSoft> loaderTaskReference;
+
+        public AsyncDrawableSoft(Resources res, Bitmap bitmap,
+                LoaderTaskSoft loaderTask) {
+            super(res, bitmap);
+            loaderTaskReference = new WeakReference<>(loaderTask);
+        }
+
+        public LoaderTaskSoft getLoaderTaskSoft() {
+            return loaderTaskReference.get();
+        }
+    }
+
+    private static LoaderTaskSoft getLoaderTaskSoft(ImageView imageView) {
+        if (imageView == null) {
+            return null;
+        }
+
+        final Drawable drawable = imageView.getDrawable();
+
+        // If our drawable is in play, get the loader task
+        if (drawable instanceof AsyncDrawableSoft) {
+            final AsyncDrawableSoft asyncDrawable = (AsyncDrawableSoft) drawable;
+            return asyncDrawable.getLoaderTaskSoft();
+        }
+
+        return null;
+    }
+
 
     private static LoaderTask getLoaderTask(ImageView imageView) {
         if (imageView == null) {
@@ -325,6 +513,41 @@ public class CachedAppAssetLoader {
         // via AsyncDrawable to this view.
         final LoaderTask task = new LoaderTask(imgView, prgView, true);
         final AsyncDrawable asyncDrawable = new AsyncDrawable(imgView.getResources(), placeholderBitmap, task);
+        imgView.setVisibility(View.INVISIBLE);
+        imgView.setImageDrawable(asyncDrawable);
+
+        // Run the task on our foreground executor
+        task.executeOnExecutor(foregroundExecutor, tuple);
+        return false;
+    }
+
+    public boolean populateImageViewSoft(NvApp app, ImageView imgView, ProgressBar prgView, boolean blurOnEnd) {
+        LoaderTuple tuple = new LoaderTuple(computer, app);
+
+        // If there's already a task in progress for this view,
+        // cancel it. If the task is already loading the same image,
+        // we return and let that load finish.
+        if (!cancelPendingLoad(tuple, imgView)) {
+            return true;
+        }
+
+        // Hide the progress bar always on initial load
+        prgView.setVisibility(View.INVISIBLE);
+
+        // First, try the memory cache in the current context
+        Bitmap bmp = memoryLoader.loadBitmapFromCache(tuple);
+        if (bmp != null) {
+            // Show the bitmap immediately
+            Bitmap bmpToLoad = bmp.copy(Config.RGB_565, false);
+            imgView.setVisibility(View.VISIBLE);
+            imgView.setImageBitmap(bmpToLoad);
+            return true;
+        }
+
+        // If it's not in memory, create an async task to load it. This task will be attached
+        // via AsyncDrawable to this view.
+        final LoaderTaskSoft task = new LoaderTaskSoft(imgView, prgView, true, blurOnEnd);
+        final AsyncDrawableSoft asyncDrawable = new AsyncDrawableSoft(imgView.getResources(), placeholderBitmap, task);
         imgView.setVisibility(View.INVISIBLE);
         imgView.setImageDrawable(asyncDrawable);
 

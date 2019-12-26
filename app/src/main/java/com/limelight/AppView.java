@@ -4,6 +4,8 @@ import android.util.Log;
 import android.view.Display;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import com.limelight.computers.ComputerManagerListener;
@@ -503,6 +505,12 @@ public class AppView extends Activity implements AdapterFragmentCallbacks {
                 boolean updated = false;
 
                 // First handle app updates and additions
+                Collections.sort(appList, new Comparator<NvApp>() {
+                    @Override
+                    public int compare(NvApp lhs, NvApp rhs) {
+                        return lhs.getAppName().toLowerCase().compareTo(rhs.getAppName().toLowerCase());
+                    }
+                });
                 for (NvApp app : appList) {
                     boolean foundExistingApp = false;
 
@@ -523,6 +531,7 @@ public class AppView extends Activity implements AdapterFragmentCallbacks {
 
                     if (!foundExistingApp) {
                         // This app must be new
+                        shortcutHelper.reportGameAdded(computer, app);
                         appGridAdapter.addApp(new AppObject(app));
                         updated = true;
                     }

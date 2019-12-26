@@ -21,6 +21,7 @@ public class MemoryAssetLoader {
 
     public Bitmap loadBitmapFromCache(CachedAppAssetLoader.LoaderTuple tuple) {
         Bitmap bmp = memoryCache.get(constructKey(tuple));
+
         if (bmp != null) {
             LimeLog.info("Memory cache hit for tuple: "+tuple);
         }
