@@ -548,6 +548,7 @@ public class NvHTTP {
                 // Remove _shield from app titles
             } else if (app.getAppName().contains("_shield")) {
                 app.setAppName(app.getAppName().replace("_shield",""));
+                app.setAppName(app.getAppName().replace(" - ",": "));
             }
         }
         

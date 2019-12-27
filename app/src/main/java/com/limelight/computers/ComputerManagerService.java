@@ -850,6 +850,7 @@ public class ComputerManagerService extends Service {
 
                                 // Update the computer
                                 computer.rawAppList = appList;
+
                                 receivedAppList = true;
 
                                 // Notify that the app list has been updated

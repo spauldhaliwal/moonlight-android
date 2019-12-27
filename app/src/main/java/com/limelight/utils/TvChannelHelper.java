@@ -27,6 +27,7 @@ import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 
 public class TvChannelHelper {
 
@@ -144,22 +145,38 @@ public class TvChannelHelper {
                     .setPosterArtAspectRatio(ASPECT_RATIO_MOVIE_POSTER)
                     .setPosterArtUri(PosterContentProvider.createBoxArtUri(computer.uuid, "" + app.getAppId()))
                     .setIntent(ServerHelper.createAppShortcutIntent(context, computer, app))
-                    .setInternalProviderId("" + app.getAppId())
-                    // Weight should increase each time we run the game
-                    .setWeight((int) ((System.currentTimeMillis() - 1500000000000L) / 1000));
-
-            Long programId = getProgramId(channelId, "" + app.getAppId());
-            if (programId != null) {
-                context.getContentResolver().update(TvContract.buildPreviewProgramUri(programId),
-                        builder.toContentValues(), null, null);
-                return;
-            }
+                    .setInternalProviderId("" + app.getAppId());
 
             context.getContentResolver().insert(TvContract.PreviewPrograms.CONTENT_URI,
                     builder.toContentValues());
 
             TvContract.requestChannelBrowsable(context, channelId);
         }
+    }
+
+    void addGamesToChannel(ComputerDetails computer, List<NvApp> apps) {
+        for (NvApp app : apps) {
+            addGameToChannel(computer, app);
+        }
+    }
+
+    void removeGameFromChannel(ComputerDetails computer, NvApp app) {
+        Long channelId = getChannelId(computer.uuid);
+        if (channelId == null) {
+            return;
+        }
+        Long programId = getProgramId(channelId, "" + app.getAppId());
+        if (programId != null) {
+            context.getContentResolver()
+                    .delete(TvContractCompat.buildPreviewProgramUri(programId), null, null);
+        }
+    }
+
+    void removeGamesFromChannel(ComputerDetails computer, List<NvApp> apps) {
+        for (NvApp app : apps) {
+            removeGameFromChannel(computer, app);
+        }
+
     }
 
     void addGameToWatchNext(ComputerDetails computer, NvApp app) {

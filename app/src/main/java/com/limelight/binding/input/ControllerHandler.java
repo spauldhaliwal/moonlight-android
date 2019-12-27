@@ -1087,7 +1087,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         return (short)Math.pow(stickValue, 3);
     }
 
-    private void sendEmulatedMouseEvent(short x, short y) {
+    public void sendEmulatedMouseEvent(short x, short y) {
         Vector2d vector = new Vector2d();
         vector.initialize(x, y);
         vector.scalarMultiply(1 / 32766.0f);

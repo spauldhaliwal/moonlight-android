@@ -248,6 +248,7 @@ public class PcView extends Activity implements AdapterFragmentCallbacks {
                             }
                         });
                     }
+
                 }
             });
             runningPolling = true;

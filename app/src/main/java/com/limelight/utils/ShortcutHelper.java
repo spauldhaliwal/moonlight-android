@@ -99,6 +99,17 @@ public class ShortcutHelper {
         tvChannelHelper.addGameToWatchNext(computer, app);
     }
 
+    public void removeGame(ComputerDetails computer, NvApp app) {
+        tvChannelHelper.removeGameFromChannel(computer, app);
+    }
+
+    public void removeGamesFromChannel(ComputerDetails computer, List<NvApp> apps) {
+        tvChannelHelper.removeGamesFromChannel(computer, apps);
+    }
+
+    public void addGamesToChannel(ComputerDetails computer, List<NvApp> apps) {
+        tvChannelHelper.addGamesToChannel(computer, apps);
+    }
 
     public void createAppViewShortcut(ComputerDetails computer, boolean forceAdd, boolean newlyPaired) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
