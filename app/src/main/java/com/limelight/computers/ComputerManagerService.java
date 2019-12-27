@@ -826,6 +826,7 @@ public class ComputerManagerService extends Service {
                                 // in a row, we'll go ahead and believe it.
                                 emptyAppListResponses++;
                             }
+
                             if (!appList.isEmpty() &&
                                     (!list.isEmpty() || emptyAppListResponses >= EMPTY_LIST_THRESHOLD)) {
                                 // Open the cache file

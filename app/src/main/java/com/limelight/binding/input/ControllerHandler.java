@@ -9,13 +9,13 @@ import android.os.Build;
 import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.util.Log;
 import android.util.SparseArray;
 import android.view.InputDevice;
 import android.view.InputEvent;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.widget.Toast;
-
 import com.limelight.LimeLog;
 import com.limelight.binding.input.driver.AbstractController;
 import com.limelight.binding.input.driver.UsbDriverListener;
@@ -26,8 +26,9 @@ import com.limelight.nvstream.input.MouseButtonPacket;
 import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.ui.GameGestures;
 import com.limelight.utils.Vector2d;
-
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -40,28 +41,41 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     private static final int MINIMUM_BUTTON_DOWN_TIME_MS = 25;
 
     private static final int EMULATING_SPECIAL = 0x1;
+
     private static final int EMULATING_SELECT = 0x2;
 
     private static final int EMULATED_SPECIAL_UP_DELAY_MS = 100;
+
     private static final int EMULATED_SELECT_UP_DELAY_MS = 30;
 
     private final Vector2d inputVector = new Vector2d();
 
     private final SparseArray<InputDeviceContext> inputDeviceContexts = new SparseArray<>();
+
     private final SparseArray<UsbDeviceContext> usbDeviceContexts = new SparseArray<>();
 
     private final NvConnection conn;
+
     private final Context activityContext;
+
     private final double stickDeadzone;
+
     private final InputDeviceContext defaultContext = new InputDeviceContext();
+
     private final GameGestures gestures;
+
     private final Vibrator deviceVibrator;
+
     private boolean hasGameController;
 
+    private List<MenuRequestedListener> menuRequestedListeners;
+
     private final PreferenceConfiguration prefConfig;
+
     private short currentControllers, initialControllers;
 
-    public ControllerHandler(Context activityContext, NvConnection conn, GameGestures gestures, PreferenceConfiguration prefConfig) {
+    public ControllerHandler(Context activityContext, NvConnection conn, GameGestures gestures,
+            PreferenceConfiguration prefConfig) {
         this.activityContext = activityContext;
         this.conn = conn;
         this.gestures = gestures;
@@ -71,6 +85,8 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // HACK: For now we're hardcoding a 7% deadzone. Some deadzone
         // is required for controller batching support to work.
         int deadzonePercentage = 7;
+
+        menuRequestedListeners = new ArrayList<>();
 
         int[] ids = InputDevice.getDeviceIds();
         for (int id : ids) {
@@ -83,7 +99,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                     (dev.getSources() & InputDevice.SOURCE_GAMEPAD) != 0) {
                 // This looks like a gamepad, but we'll check X and Y to be sure
                 if (getMotionRangeForJoystickAxis(dev, MotionEvent.AXIS_X) != null &&
-                    getMotionRangeForJoystickAxis(dev, MotionEvent.AXIS_Y) != null) {
+                        getMotionRangeForJoystickAxis(dev, MotionEvent.AXIS_Y) != null) {
                     // This is a gamepad
                     hasGameController = true;
                 }
@@ -95,7 +111,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             deadzonePercentage = 1;
         }
 
-        this.stickDeadzone = (double)deadzonePercentage / 100.0;
+        this.stickDeadzone = (double) deadzonePercentage / 100.0;
 
         // Initialize the default context for events with no device
         defaultContext.leftStickXAxis = MotionEvent.AXIS_X;
@@ -144,7 +160,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     public void onInputDeviceRemoved(int deviceId) {
         InputDeviceContext context = inputDeviceContexts.get(deviceId);
         if (context != null) {
-            LimeLog.info("Removed controller: "+context.name+" ("+deviceId+")");
+            LimeLog.info("Removed controller: " + context.name + " (" + deviceId + ")");
             releaseControllerNumber(context);
             inputDeviceContexts.remove(deviceId);
         }
@@ -206,7 +222,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             }
 
             if (hasJoystickAxes(dev)) {
-                LimeLog.info("Counting InputDevice: "+dev.getName());
+                LimeLog.info("Counting InputDevice: " + dev.getName());
                 mask |= 1 << count++;
             }
         }
@@ -219,7 +235,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                 // otherwise we will double count them.
                 if (UsbDriverService.shouldClaimDevice(dev, false) &&
                         !UsbDriverService.isRecognizedInputDevice(dev)) {
-                    LimeLog.info("Counting UsbDevice: "+dev.getDeviceName());
+                    LimeLog.info("Counting UsbDevice: " + dev.getDeviceName());
                     mask |= 1 << count++;
                 }
             }
@@ -230,14 +246,14 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             mask |= 1;
         }
 
-        LimeLog.info("Enumerated "+count+" gamepads");
+        LimeLog.info("Enumerated " + count + " gamepads");
         return mask;
     }
 
     private void releaseControllerNumber(GenericControllerContext context) {
         // If we reserved a controller number, remove that reservation
         if (context.reservedControllerNumber) {
-            LimeLog.info("Controller number "+context.controllerNumber+" is now available");
+            LimeLog.info("Controller number " + context.controllerNumber + " is now available");
             currentControllers &= ~(1 << context.controllerNumber);
         }
 
@@ -263,14 +279,14 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         if (context instanceof InputDeviceContext) {
             InputDeviceContext devContext = (InputDeviceContext) context;
 
-            LimeLog.info(devContext.name+" ("+context.id+") needs a controller number assigned");
+            LimeLog.info(devContext.name + " (" + context.id + ") needs a controller number assigned");
             if (devContext.name != null &&
                     (devContext.name.contains("gpio-keys") || // This is the back button on Shield portable consoles
-                            devContext.name.contains("joy_key"))) { // These are the gamepad buttons on the Archos Gamepad 2
+                            devContext.name
+                                    .contains("joy_key"))) { // These are the gamepad buttons on the Archos Gamepad 2
                 LimeLog.info("Built-in buttons hardcoded as controller 0");
                 context.controllerNumber = 0;
-            }
-            else if (prefConfig.multiController && devContext.hasJoystickAxes) {
+            } else if (prefConfig.multiController && devContext.hasJoystickAxes) {
                 context.controllerNumber = 0;
 
                 LimeLog.info("Reserving the next available controller number");
@@ -287,13 +303,11 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                         break;
                     }
                 }
-            }
-            else {
+            } else {
                 LimeLog.info("Not reserving a controller number");
                 context.controllerNumber = 0;
             }
-        }
-        else {
+        } else {
             if (prefConfig.multiController) {
                 context.controllerNumber = 0;
 
@@ -311,14 +325,13 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                         break;
                     }
                 }
-            }
-            else {
+            } else {
                 LimeLog.info("Not reserving a controller number");
                 context.controllerNumber = 0;
             }
         }
 
-        LimeLog.info("Assigned as controller "+context.controllerNumber);
+        LimeLog.info("Assigned as controller " + context.controllerNumber);
         context.assignedControllerNumber = true;
     }
 
@@ -346,11 +359,10 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             // Landroid/view/InputDevice;->isExternal()Z is officially public on Android Q
             return dev.isExternal();
-        }
-        else {
+        } else {
             try {
                 // Landroid/view/InputDevice;->isExternal()Z is on the light graylist in Android P
-                return (Boolean)dev.getClass().getMethod("isExternal").invoke(dev);
+                return (Boolean) dev.getClass().getMethod("isExternal").invoke(dev);
             } catch (NoSuchMethodException e) {
                 e.printStackTrace();
             } catch (IllegalAccessException e) {
@@ -425,10 +437,10 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         InputDeviceContext context = new InputDeviceContext();
         String devName = dev.getName();
 
-        LimeLog.info("Creating controller context for device: "+devName);
+        LimeLog.info("Creating controller context for device: " + devName);
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
-            LimeLog.info("Vendor ID: "+dev.getVendorId());
-            LimeLog.info("Product ID: "+dev.getProductId());
+            LimeLog.info("Vendor ID: " + dev.getVendorId());
+            LimeLog.info("Product ID: " + dev.getProductId());
         }
         LimeLog.info(dev.toString());
 
@@ -453,26 +465,19 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         InputDevice.MotionRange brakeRange = getMotionRangeForJoystickAxis(dev, MotionEvent.AXIS_BRAKE);
         InputDevice.MotionRange gasRange = getMotionRangeForJoystickAxis(dev, MotionEvent.AXIS_GAS);
         InputDevice.MotionRange throttleRange = getMotionRangeForJoystickAxis(dev, MotionEvent.AXIS_THROTTLE);
-        if (leftTriggerRange != null && rightTriggerRange != null)
-        {
+        if (leftTriggerRange != null && rightTriggerRange != null) {
             // Some controllers use LTRIGGER and RTRIGGER (like Ouya)
             context.leftTriggerAxis = MotionEvent.AXIS_LTRIGGER;
             context.rightTriggerAxis = MotionEvent.AXIS_RTRIGGER;
-        }
-        else if (brakeRange != null && gasRange != null)
-        {
+        } else if (brakeRange != null && gasRange != null) {
             // Others use GAS and BRAKE (like Moga)
             context.leftTriggerAxis = MotionEvent.AXIS_BRAKE;
             context.rightTriggerAxis = MotionEvent.AXIS_GAS;
-        }
-        else if (brakeRange != null && throttleRange != null)
-        {
+        } else if (brakeRange != null && throttleRange != null) {
             // Others use THROTTLE and BRAKE (like Xiaomi)
             context.leftTriggerAxis = MotionEvent.AXIS_BRAKE;
             context.rightTriggerAxis = MotionEvent.AXIS_THROTTLE;
-        }
-        else
-        {
+        } else {
             InputDevice.MotionRange rxRange = getMotionRangeForJoystickAxis(dev, MotionEvent.AXIS_RX);
             InputDevice.MotionRange ryRange = getMotionRangeForJoystickAxis(dev, MotionEvent.AXIS_RY);
             if (rxRange != null && ryRange != null && devName != null) {
@@ -481,14 +486,12 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                         if (dev.hasKeys(KeyEvent.KEYCODE_BUTTON_C)[0]) {
                             LimeLog.info("Detected non-standard DualShock 4 mapping");
                             context.isNonStandardDualShock4 = true;
-                        }
-                        else {
+                        } else {
                             LimeLog.info("Detected DualShock 4 (Linux standard mapping)");
                             context.usesLinuxGamepadStandardFaceButtons = true;
                         }
                     }
-                }
-                else if (!devName.contains("Xbox") && !devName.contains("XBox") && !devName.contains("X-Box")) {
+                } else if (!devName.contains("Xbox") && !devName.contains("XBox") && !devName.contains("X-Box")) {
                     LimeLog.info("Assuming non-standard DualShock 4 mapping on < 4.4");
                     context.isNonStandardDualShock4 = true;
                 }
@@ -497,8 +500,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                     // The old DS4 driver uses RX and RY for triggers
                     context.leftTriggerAxis = MotionEvent.AXIS_RX;
                     context.rightTriggerAxis = MotionEvent.AXIS_RY;
-                }
-                else {
+                } else {
                     // If it's not a non-standard DS4 controller, it's probably an Xbox controller or
                     // other sane controller that uses RX and RY for right stick and Z and RZ for triggers.
                     context.rightStickXAxis = MotionEvent.AXIS_RX;
@@ -526,8 +528,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             if (zRange != null && rzRange != null) {
                 context.rightStickXAxis = MotionEvent.AXIS_Z;
                 context.rightStickYAxis = MotionEvent.AXIS_RZ;
-            }
-            else {
+            } else {
                 InputDevice.MotionRange rxRange = getMotionRangeForJoystickAxis(dev, MotionEvent.AXIS_RX);
                 InputDevice.MotionRange ryRange = getMotionRangeForJoystickAxis(dev, MotionEvent.AXIS_RY);
 
@@ -564,8 +565,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
             // For triggers without (valid) deadzones, we'll use 13% (around XInput's default)
             if (context.triggerDeadzone < 0.13f ||
-                context.triggerDeadzone > 0.30f)
-            {
+                    context.triggerDeadzone > 0.30f) {
                 context.triggerDeadzone = 0.13f;
             }
         }
@@ -625,8 +625,9 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             }
         }
 
-        LimeLog.info("Analog stick deadzone: "+context.leftStickDeadzoneRadius+" "+context.rightStickDeadzoneRadius);
-        LimeLog.info("Trigger deadzone: "+context.triggerDeadzone);
+        LimeLog.info(
+                "Analog stick deadzone: " + context.leftStickDeadzoneRadius + " " + context.rightStickDeadzoneRadius);
+        LimeLog.info("Trigger deadzone: " + context.triggerDeadzone);
 
         return context;
     }
@@ -635,8 +636,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // Unknown devices use the default context
         if (event.getDeviceId() == 0) {
             return defaultContext;
-        }
-        else if (event.getDevice() == null) {
+        } else if (event.getDevice() == null) {
             // During device removal, sometimes we can get events after the
             // input device has been destroyed. In this case we'll see a
             // != 0 device ID but no device attached.
@@ -661,8 +661,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         int absB = Math.abs(b);
         if (absA > absB) {
             return a;
-        }
-        else {
+        } else {
             return b;
         }
     }
@@ -672,17 +671,15 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         int absB = Math.abs(b);
         if (absA > absB) {
             return a;
-        }
-        else {
+        } else {
             return b;
         }
     }
 
     private short getActiveControllerMask() {
         if (prefConfig.multiController) {
-            return (short)(currentControllers | initialControllers | (prefConfig.onscreenController ? 1 : 0));
-        }
-        else {
+            return (short) (currentControllers | initialControllers | (prefConfig.onscreenController ? 1 : 0));
+        } else {
             // Only Player 1 is active with multi-controller disabled
             return 1;
         }
@@ -743,7 +740,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         }
 
         if (originalContext.mouseEmulationActive) {
-            int changedMask = inputMap ^  originalContext.mouseEmulationLastInputMap;
+            int changedMask = inputMap ^ originalContext.mouseEmulationLastInputMap;
 
             boolean aDown = (inputMap & ControllerPacket.A_FLAG) != 0;
             boolean bDown = (inputMap & ControllerPacket.B_FLAG) != 0;
@@ -753,16 +750,14 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             if ((changedMask & ControllerPacket.A_FLAG) != 0) {
                 if (aDown) {
                     conn.sendMouseButtonDown(MouseButtonPacket.BUTTON_LEFT);
-                }
-                else {
+                } else {
                     conn.sendMouseButtonUp(MouseButtonPacket.BUTTON_LEFT);
                 }
             }
             if ((changedMask & ControllerPacket.B_FLAG) != 0) {
                 if (bDown) {
                     conn.sendMouseButtonDown(MouseButtonPacket.BUTTON_RIGHT);
-                }
-                else {
+                } else {
                     conn.sendMouseButtonUp(MouseButtonPacket.BUTTON_RIGHT);
                 }
             }
@@ -778,9 +773,9 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             }
 
             conn.sendControllerInput(controllerNumber, getActiveControllerMask(),
-                    (short)0, (byte)0, (byte)0, (short)0, (short)0, (short)0, (short)0);
-        }
-        else {
+                    (short) 0, (byte) 0, (byte) 0, (short) 0, (short) 0, (short) 0, (short) 0);
+        } else {
+            Log.d("ControllerHandler", "sending controller input to stream: " + inputMap);
             conn.sendControllerInput(controllerNumber, getActiveControllerMask(),
                     inputMap,
                     leftTrigger, rightTrigger,
@@ -851,14 +846,13 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // If this is a Serval controller sending an unknown key code, it's probably
         // the start and select buttons
         else if (context.isServal && event.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN) {
-            switch (event.getScanCode())  {
+            switch (event.getScanCode()) {
                 case 314:
                     return KeyEvent.KEYCODE_BUTTON_SELECT;
                 case 315:
                     return KeyEvent.KEYCODE_BUTTON_START;
             }
-        }
-        else if (context.isNonStandardXboxBtController) {
+        } else if (context.isNonStandardXboxBtController) {
             switch (event.getScanCode()) {
                 case 306:
                     return KeyEvent.KEYCODE_BUTTON_X;
@@ -890,36 +884,34 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
         if (context.hatXAxis != -1 && context.hatYAxis != -1) {
             switch (event.getKeyCode()) {
-            // These are duplicate dpad events for hat input
-            case KeyEvent.KEYCODE_DPAD_LEFT:
-            case KeyEvent.KEYCODE_DPAD_RIGHT:
-            case KeyEvent.KEYCODE_DPAD_CENTER:
-            case KeyEvent.KEYCODE_DPAD_UP:
-            case KeyEvent.KEYCODE_DPAD_DOWN:
-                return 0;
+                // These are duplicate dpad events for hat input
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                case KeyEvent.KEYCODE_DPAD_CENTER:
+                case KeyEvent.KEYCODE_DPAD_UP:
+                case KeyEvent.KEYCODE_DPAD_DOWN:
+                    return 0;
             }
-        }
-        else if (context.hatXAxis == -1 &&
-                 context.hatYAxis == -1 &&
+        } else if (context.hatXAxis == -1 &&
+                context.hatYAxis == -1 &&
                  /* FIXME: There's no good way to know for sure if xpad is bound
                     to this device, so we won't use the name to validate if these
                     scancodes should be mapped to DPAD
 
                     context.isXboxController &&
                   */
-                 event.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN) {
+                event.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN) {
             // If there's not a proper Xbox controller mapping, we'll translate the raw d-pad
             // scan codes into proper key codes
-            switch (event.getScanCode())
-            {
-            case 704:
-                return KeyEvent.KEYCODE_DPAD_LEFT;
-            case 705:
-                return KeyEvent.KEYCODE_DPAD_RIGHT;
-            case 706:
-                return KeyEvent.KEYCODE_DPAD_UP;
-            case 707:
-                return KeyEvent.KEYCODE_DPAD_DOWN;
+            switch (event.getScanCode()) {
+                case 704:
+                    return KeyEvent.KEYCODE_DPAD_LEFT;
+                case 705:
+                    return KeyEvent.KEYCODE_DPAD_RIGHT;
+                case 706:
+                    return KeyEvent.KEYCODE_DPAD_UP;
+                case 707:
+                    return KeyEvent.KEYCODE_DPAD_DOWN;
             }
         }
 
@@ -931,8 +923,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // which sends BACK with META_ALT_ON instead of KEYCODE_BUTTON_B
         if (keyCode == KeyEvent.KEYCODE_BACK &&
                 !event.hasNoModifiers() &&
-                (event.getFlags() & KeyEvent.FLAG_SOFT_KEYBOARD) != 0)
-        {
+                (event.getFlags() & KeyEvent.FLAG_SOFT_KEYBOARD) != 0) {
             keyCode = KeyEvent.KEYCODE_BUTTON_B;
         }
 
@@ -940,16 +931,13 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                 keyCode == KeyEvent.KEYCODE_MENU) {
             // Ensure that we never use back as start if we have a real start
             context.backIsStart = false;
-        }
-        else if (keyCode == KeyEvent.KEYCODE_BUTTON_SELECT) {
+        } else if (keyCode == KeyEvent.KEYCODE_BUTTON_SELECT) {
             // Don't use mode as select if we have a select
             context.modeIsSelect = false;
-        }
-        else if (context.backIsStart && keyCode == KeyEvent.KEYCODE_BACK) {
+        } else if (context.backIsStart && keyCode == KeyEvent.KEYCODE_BACK) {
             // Emulate the start button with back
             return KeyEvent.KEYCODE_BUTTON_START;
-        }
-        else if (context.modeIsSelect && keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
+        } else if (context.modeIsSelect && keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
             // Emulate the select button with mode
             return KeyEvent.KEYCODE_BUTTON_SELECT;
         }
@@ -975,7 +963,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     }
 
     private void handleAxisSet(InputDeviceContext context, float lsX, float lsY, float rsX,
-                               float rsY, float lt, float rt, float hatX, float hatY) {
+            float rsY, float lt, float rt, float hatX, float hatY) {
 
         if (context.leftStickXAxis != -1 && context.leftStickYAxis != -1) {
             Vector2d leftStickVector = populateCachedVector(lsX, lsY);
@@ -1022,24 +1010,22 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                 rt = 0;
             }
 
-            context.leftTrigger = (byte)(lt * 0xFF);
-            context.rightTrigger = (byte)(rt * 0xFF);
+            context.leftTrigger = (byte) (lt * 0xFF);
+            context.rightTrigger = (byte) (rt * 0xFF);
         }
 
         if (context.hatXAxis != -1 && context.hatYAxis != -1) {
             context.inputMap &= ~(ControllerPacket.LEFT_FLAG | ControllerPacket.RIGHT_FLAG);
             if (hatX < -0.5) {
                 context.inputMap |= ControllerPacket.LEFT_FLAG;
-            }
-            else if (hatX > 0.5) {
+            } else if (hatX > 0.5) {
                 context.inputMap |= ControllerPacket.RIGHT_FLAG;
             }
 
             context.inputMap &= ~(ControllerPacket.UP_FLAG | ControllerPacket.DOWN_FLAG);
             if (hatY < -0.5) {
                 context.inputMap |= ControllerPacket.UP_FLAG;
-            }
-            else if (hatY > 0.5) {
+            } else if (hatY > 0.5) {
                 context.inputMap |= ControllerPacket.DOWN_FLAG;
             }
         }
@@ -1084,7 +1070,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     }
 
     private short scaleRawStickAxis(float stickValue) {
-        return (short)Math.pow(stickValue, 3);
+        return (short) Math.pow(stickValue, 3);
     }
 
     public void sendEmulatedMouseEvent(short x, short y) {
@@ -1096,7 +1082,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             // Move faster as the stick is pressed further from center
             vector.scalarMultiply(Math.pow(vector.getMagnitude(), 2));
             if (vector.getMagnitude() >= 1) {
-                conn.sendMouseMove((short)vector.getX(), (short)-vector.getY());
+                conn.sendMouseMove((short) vector.getX(), (short) -vector.getY());
             }
         }
     }
@@ -1109,7 +1095,8 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         }
 
         context.mouseEmulationActive = !context.mouseEmulationActive;
-        Toast.makeText(activityContext, "Mouse emulation is: " + (context.mouseEmulationActive ? "ON" : "OFF"), Toast.LENGTH_SHORT).show();
+        Toast.makeText(activityContext, "Mouse emulation is: " + (context.mouseEmulationActive ? "ON" : "OFF"),
+                Toast.LENGTH_SHORT).show();
 
         if (context.mouseEmulationActive) {
             context.mouseEmulationTimer = new Timer();
@@ -1128,9 +1115,9 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // Since we can only use a single amplitude value, compute the desired amplitude
         // by taking 80% of the big motor and 33% of the small motor, then capping to 255.
         // NB: This value is now 0-255 as required by VibrationEffect.
-        short lowFreqMotorMSB = (short)((lowFreqMotor >> 8) & 0xFF);
-        short highFreqMotorMSB = (short)((highFreqMotor >> 8) & 0xFF);
-        int simulatedAmplitude = Math.min(255, (int)((lowFreqMotorMSB * 0.80) + (highFreqMotorMSB * 0.33)));
+        short lowFreqMotorMSB = (short) ((lowFreqMotor >> 8) & 0xFF);
+        short highFreqMotorMSB = (short) ((highFreqMotor >> 8) & 0xFF);
+        int simulatedAmplitude = Math.min(255, (int) ((lowFreqMotorMSB * 0.80) + (highFreqMotorMSB * 0.33)));
 
         if (simulatedAmplitude == 0) {
             // This case is easy - just cancel the current effect and get out.
@@ -1157,15 +1144,14 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // If we reach this point, we don't have amplitude controls available, so
         // we must emulate it by PWMing the vibration. Ick.
         long pwmPeriod = 20;
-        long onTime = (long)((simulatedAmplitude / 255.0) * pwmPeriod);
+        long onTime = (long) ((simulatedAmplitude / 255.0) * pwmPeriod);
         long offTime = pwmPeriod - onTime;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             AudioAttributes audioAttributes = new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_GAME)
                     .build();
             vibrator.vibrate(new long[]{0, onTime, offTime}, 0, audioAttributes);
-        }
-        else {
+        } else {
             vibrator.vibrate(new long[]{0, onTime, offTime}, 0);
         }
     }
@@ -1192,7 +1178,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
             if (deviceContext.controllerNumber == controllerNumber) {
                 foundMatchingDevice = vibrated = true;
-                deviceContext.device.rumble((short)lowFreqMotor, (short)highFreqMotor);
+                deviceContext.device.rumble((short) lowFreqMotor, (short) highFreqMotor);
             }
         }
 
@@ -1201,10 +1187,10 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             // If we didn't find a matching device, it must be the on-screen
             // controls that triggered the rumble. Vibrate the device if
             // the user has requested that behavior.
-            if (!foundMatchingDevice && prefConfig.onscreenController && !prefConfig.onlyL3R3 && prefConfig.vibrateOsc) {
+            if (!foundMatchingDevice && prefConfig.onscreenController && !prefConfig.onlyL3R3
+                    && prefConfig.vibrateOsc) {
                 rumbleVibrator(deviceVibrator, lowFreqMotor, highFreqMotor);
-            }
-            else if (foundMatchingDevice && !vibrated && prefConfig.vibrateFallbackToDevice) {
+            } else if (foundMatchingDevice && !vibrated && prefConfig.vibrateFallbackToDevice) {
                 // We found a device to vibrate but it didn't have rumble support. The user
                 // has requested us to vibrate the device in this case.
                 rumbleVibrator(deviceVibrator, lowFreqMotor, highFreqMotor);
@@ -1226,127 +1212,122 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // If the button hasn't been down long enough, sleep for a bit before sending the up event
         // This allows "instant" button presses (like OUYA's virtual menu button) to work. This
         // path should not be triggered during normal usage.
-        if (SystemClock.uptimeMillis() - event.getDownTime() < ControllerHandler.MINIMUM_BUTTON_DOWN_TIME_MS)
-        {
+        if (SystemClock.uptimeMillis() - event.getDownTime() < ControllerHandler.MINIMUM_BUTTON_DOWN_TIME_MS) {
             // Since our sleep time is so short (10 ms), it shouldn't cause a problem doing this in the
             // UI thread.
             try {
                 Thread.sleep(ControllerHandler.MINIMUM_BUTTON_DOWN_TIME_MS);
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException ignored) {
+            }
         }
 
         switch (keyCode) {
-        case KeyEvent.KEYCODE_BUTTON_MODE:
-            context.inputMap &= ~ControllerPacket.SPECIAL_BUTTON_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_START:
-        case KeyEvent.KEYCODE_MENU:
-            // Sometimes we'll get a spurious key up event on controller disconnect.
-            // Make sure it's real by checking that the key is actually down before taking
-            // any action.
-            if ((context.inputMap & ControllerPacket.PLAY_FLAG) != 0 &&
-                    SystemClock.uptimeMillis() - context.startDownTime > ControllerHandler.START_DOWN_TIME_MOUSE_MODE_MS &&
-                    prefConfig.mouseEmulation) {
-                toggleMouseEmulation(context);
-            }
-            context.inputMap &= ~ControllerPacket.PLAY_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BACK:
-        case KeyEvent.KEYCODE_BUTTON_SELECT:
-            context.inputMap &= ~ControllerPacket.BACK_FLAG;
-            break;
-        case KeyEvent.KEYCODE_DPAD_LEFT:
-            context.inputMap &= ~ControllerPacket.LEFT_FLAG;
-            break;
-        case KeyEvent.KEYCODE_DPAD_RIGHT:
-            context.inputMap &= ~ControllerPacket.RIGHT_FLAG;
-            break;
-        case KeyEvent.KEYCODE_DPAD_UP:
-            context.inputMap &= ~ControllerPacket.UP_FLAG;
-            break;
-        case KeyEvent.KEYCODE_DPAD_DOWN:
-            context.inputMap &= ~ControllerPacket.DOWN_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_B:
-            context.inputMap &= ~ControllerPacket.B_FLAG;
-            break;
-        case KeyEvent.KEYCODE_DPAD_CENTER:
-        case KeyEvent.KEYCODE_BUTTON_A:
-            context.inputMap &= ~ControllerPacket.A_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_X:
-            context.inputMap &= ~ControllerPacket.X_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_Y:
-            context.inputMap &= ~ControllerPacket.Y_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_L1:
-            context.inputMap &= ~ControllerPacket.LB_FLAG;
-            context.lastLbUpTime = SystemClock.uptimeMillis();
-            break;
-        case KeyEvent.KEYCODE_BUTTON_R1:
-            context.inputMap &= ~ControllerPacket.RB_FLAG;
-            context.lastRbUpTime = SystemClock.uptimeMillis();
-            break;
-        case KeyEvent.KEYCODE_BUTTON_THUMBL:
-            context.inputMap &= ~ControllerPacket.LS_CLK_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_THUMBR:
-            context.inputMap &= ~ControllerPacket.RS_CLK_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_L2:
-            if (context.leftTriggerAxisUsed) {
-                // Suppress this digital event if an analog trigger is active
-                return true;
-            }
-            context.leftTrigger = 0;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_R2:
-            if (context.rightTriggerAxisUsed) {
-                // Suppress this digital event if an analog trigger is active
-                return true;
-            }
-            context.rightTrigger = 0;
-            break;
-        default:
-            return false;
+            case KeyEvent.KEYCODE_BUTTON_MODE:
+                context.inputMap &= ~ControllerPacket.SPECIAL_BUTTON_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_START:
+            case KeyEvent.KEYCODE_MENU:
+                if (SystemClock.uptimeMillis() - context.startDownTime
+                        < ControllerHandler.START_DOWN_TIME_MOUSE_MODE_MS
+                ) {
+                    context.inputMap |= ControllerPacket.PLAY_FLAG;
+                }
+                break;
+            case KeyEvent.KEYCODE_BACK:
+            case KeyEvent.KEYCODE_BUTTON_SELECT:
+                context.inputMap &= ~ControllerPacket.BACK_FLAG;
+                break;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                context.inputMap &= ~ControllerPacket.LEFT_FLAG;
+                break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                context.inputMap &= ~ControllerPacket.RIGHT_FLAG;
+                break;
+            case KeyEvent.KEYCODE_DPAD_UP:
+                context.inputMap &= ~ControllerPacket.UP_FLAG;
+                break;
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                context.inputMap &= ~ControllerPacket.DOWN_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_B:
+                context.inputMap &= ~ControllerPacket.B_FLAG;
+                break;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_BUTTON_A:
+                context.inputMap &= ~ControllerPacket.A_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_X:
+                context.inputMap &= ~ControllerPacket.X_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_Y:
+                context.inputMap &= ~ControllerPacket.Y_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_L1:
+                context.inputMap &= ~ControllerPacket.LB_FLAG;
+                context.lastLbUpTime = SystemClock.uptimeMillis();
+                break;
+            case KeyEvent.KEYCODE_BUTTON_R1:
+                context.inputMap &= ~ControllerPacket.RB_FLAG;
+                context.lastRbUpTime = SystemClock.uptimeMillis();
+                break;
+            case KeyEvent.KEYCODE_BUTTON_THUMBL:
+                context.inputMap &= ~ControllerPacket.LS_CLK_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_THUMBR:
+                context.inputMap &= ~ControllerPacket.RS_CLK_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_L2:
+                if (context.leftTriggerAxisUsed) {
+                    // Suppress this digital event if an analog trigger is active
+                    return true;
+                }
+                context.leftTrigger = 0;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_R2:
+                if (context.rightTriggerAxisUsed) {
+                    // Suppress this digital event if an analog trigger is active
+                    return true;
+                }
+                context.rightTrigger = 0;
+                break;
+            default:
+                return false;
         }
 
         // Check if we're emulating the select button
-        if ((context.emulatingButtonFlags & ControllerHandler.EMULATING_SELECT) != 0)
-        {
+        if ((context.emulatingButtonFlags & ControllerHandler.EMULATING_SELECT) != 0) {
             // If either start or LB is up, select comes up too
             if ((context.inputMap & ControllerPacket.PLAY_FLAG) == 0 ||
-                (context.inputMap & ControllerPacket.LB_FLAG) == 0)
-            {
+                    (context.inputMap & ControllerPacket.LB_FLAG) == 0) {
                 context.inputMap &= ~ControllerPacket.BACK_FLAG;
 
                 context.emulatingButtonFlags &= ~ControllerHandler.EMULATING_SELECT;
 
                 try {
                     Thread.sleep(EMULATED_SELECT_UP_DELAY_MS);
-                } catch (InterruptedException ignored) {}
+                } catch (InterruptedException ignored) {
+                }
             }
         }
 
         // Check if we're emulating the special button
-        if ((context.emulatingButtonFlags & ControllerHandler.EMULATING_SPECIAL) != 0)
-        {
+        if ((context.emulatingButtonFlags & ControllerHandler.EMULATING_SPECIAL) != 0) {
             // If either start or select and RB is up, the special button comes up too
             if ((context.inputMap & ControllerPacket.PLAY_FLAG) == 0 ||
-                ((context.inputMap & ControllerPacket.BACK_FLAG) == 0 &&
-                 (context.inputMap & ControllerPacket.RB_FLAG) == 0))
-            {
+                    ((context.inputMap & ControllerPacket.BACK_FLAG) == 0 &&
+                            (context.inputMap & ControllerPacket.RB_FLAG) == 0)) {
                 context.inputMap &= ~ControllerPacket.SPECIAL_BUTTON_FLAG;
 
                 context.emulatingButtonFlags &= ~ControllerHandler.EMULATING_SPECIAL;
 
                 try {
                     Thread.sleep(EMULATED_SPECIAL_UP_DELAY_MS);
-                } catch (InterruptedException ignored) {}
+                } catch (InterruptedException ignored) {
+                }
             }
         }
 
+        Log.d("ControllerHandler", "sending input packet");
         sendControllerInputPacket(context);
         return true;
     }
@@ -1363,80 +1344,85 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         }
 
         switch (keyCode) {
-        case KeyEvent.KEYCODE_BUTTON_MODE:
-            context.inputMap |= ControllerPacket.SPECIAL_BUTTON_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_START:
-        case KeyEvent.KEYCODE_MENU:
-            if (event.getRepeatCount() == 0) {
-                context.startDownTime = SystemClock.uptimeMillis();
-            }
-            context.inputMap |= ControllerPacket.PLAY_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BACK:
-        case KeyEvent.KEYCODE_BUTTON_SELECT:
-            context.inputMap |= ControllerPacket.BACK_FLAG;
-            break;
-        case KeyEvent.KEYCODE_DPAD_LEFT:
-            context.inputMap |= ControllerPacket.LEFT_FLAG;
-            break;
-        case KeyEvent.KEYCODE_DPAD_RIGHT:
-            context.inputMap |= ControllerPacket.RIGHT_FLAG;
-            break;
-        case KeyEvent.KEYCODE_DPAD_UP:
-            context.inputMap |= ControllerPacket.UP_FLAG;
-            break;
-        case KeyEvent.KEYCODE_DPAD_DOWN:
-            context.inputMap |= ControllerPacket.DOWN_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_B:
-            context.inputMap |= ControllerPacket.B_FLAG;
-            break;
-        case KeyEvent.KEYCODE_DPAD_CENTER:
-        case KeyEvent.KEYCODE_BUTTON_A:
-            context.inputMap |= ControllerPacket.A_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_X:
-            context.inputMap |= ControllerPacket.X_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_Y:
-            context.inputMap |= ControllerPacket.Y_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_L1:
-            context.inputMap |= ControllerPacket.LB_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_R1:
-            context.inputMap |= ControllerPacket.RB_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_THUMBL:
-            context.inputMap |= ControllerPacket.LS_CLK_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_THUMBR:
-            context.inputMap |= ControllerPacket.RS_CLK_FLAG;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_L2:
-            if (context.leftTriggerAxisUsed) {
-                // Suppress this digital event if an analog trigger is active
-                return true;
-            }
-            context.leftTrigger = (byte)0xFF;
-            break;
-        case KeyEvent.KEYCODE_BUTTON_R2:
-            if (context.rightTriggerAxisUsed) {
-                // Suppress this digital event if an analog trigger is active
-                return true;
-            }
-            context.rightTrigger = (byte)0xFF;
-            break;
-        default:
-            return false;
+            case KeyEvent.KEYCODE_BUTTON_MODE:
+                context.inputMap |= ControllerPacket.SPECIAL_BUTTON_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_START:
+            case KeyEvent.KEYCODE_MENU:
+                context.inputMap = 0;
+
+                if (event.getRepeatCount() == 0) {
+                    context.startDownTime = SystemClock.uptimeMillis();
+                }
+                if (event.isLongPress()) {
+                    for (MenuRequestedListener listener : menuRequestedListeners) {
+                        listener.onMenuRequested();
+                    }
+                }
+                break;
+            case KeyEvent.KEYCODE_BACK:
+            case KeyEvent.KEYCODE_BUTTON_SELECT:
+                context.inputMap |= ControllerPacket.BACK_FLAG;
+                break;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                context.inputMap |= ControllerPacket.LEFT_FLAG;
+                break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                context.inputMap |= ControllerPacket.RIGHT_FLAG;
+                break;
+            case KeyEvent.KEYCODE_DPAD_UP:
+                context.inputMap |= ControllerPacket.UP_FLAG;
+                break;
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                context.inputMap |= ControllerPacket.DOWN_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_B:
+                context.inputMap |= ControllerPacket.B_FLAG;
+                break;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_BUTTON_A:
+                context.inputMap |= ControllerPacket.A_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_X:
+                context.inputMap |= ControllerPacket.X_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_Y:
+                context.inputMap |= ControllerPacket.Y_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_L1:
+                context.inputMap |= ControllerPacket.LB_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_R1:
+                context.inputMap |= ControllerPacket.RB_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_THUMBL:
+                context.inputMap |= ControllerPacket.LS_CLK_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_THUMBR:
+                context.inputMap |= ControllerPacket.RS_CLK_FLAG;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_L2:
+                if (context.leftTriggerAxisUsed) {
+                    // Suppress this digital event if an analog trigger is active
+                    return true;
+                }
+                context.leftTrigger = (byte) 0xFF;
+                break;
+            case KeyEvent.KEYCODE_BUTTON_R2:
+                if (context.rightTriggerAxisUsed) {
+                    // Suppress this digital event if an analog trigger is active
+                    return true;
+                }
+                context.rightTrigger = (byte) 0xFF;
+                break;
+            default:
+                return false;
         }
 
         // Start+LB acts like select for controllers with one button
         if ((context.inputMap & ControllerPacket.PLAY_FLAG) != 0 &&
-            ((context.inputMap & ControllerPacket.LB_FLAG) != 0 ||
-              SystemClock.uptimeMillis() - context.lastLbUpTime <= MAXIMUM_BUMPER_UP_DELAY_MS))
-        {
+                ((context.inputMap & ControllerPacket.LB_FLAG) != 0 ||
+                        SystemClock.uptimeMillis() - context.lastLbUpTime <= MAXIMUM_BUMPER_UP_DELAY_MS)) {
             context.inputMap &= ~(ControllerPacket.PLAY_FLAG | ControllerPacket.LB_FLAG);
             context.inputMap |= ControllerPacket.BACK_FLAG;
 
@@ -1445,16 +1431,14 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
         // We detect select+start or start+RB as the special button combo
         if (((context.inputMap & ControllerPacket.RB_FLAG) != 0 ||
-             (SystemClock.uptimeMillis() - context.lastRbUpTime <= MAXIMUM_BUMPER_UP_DELAY_MS) ||
-             (context.inputMap & ControllerPacket.BACK_FLAG) != 0) &&
-            (context.inputMap & ControllerPacket.PLAY_FLAG) != 0)
-        {
+                (SystemClock.uptimeMillis() - context.lastRbUpTime <= MAXIMUM_BUMPER_UP_DELAY_MS) ||
+                (context.inputMap & ControllerPacket.BACK_FLAG) != 0) &&
+                (context.inputMap & ControllerPacket.PLAY_FLAG) != 0) {
             context.inputMap &= ~(ControllerPacket.BACK_FLAG | ControllerPacket.PLAY_FLAG | ControllerPacket.RB_FLAG);
             context.inputMap |= ControllerPacket.SPECIAL_BUTTON_FLAG;
 
             context.emulatingButtonFlags |= ControllerHandler.EMULATING_SPECIAL;
         }
-
 
         // We don't need to send repeat key down events, but the platform
         // sends us events that claim to be repeats but they're from different
@@ -1464,9 +1448,9 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     }
 
     public void reportOscState(short buttonFlags,
-                               short leftStickX, short leftStickY,
-                               short rightStickX, short rightStickY,
-                               byte leftTrigger, byte rightTrigger) {
+            short leftStickX, short leftStickY,
+            short rightStickX, short rightStickY,
+            byte leftTrigger, byte rightTrigger) {
         defaultContext.leftStickX = leftStickX;
         defaultContext.leftStickY = leftStickY;
 
@@ -1483,9 +1467,9 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
     @Override
     public void reportControllerState(int controllerId, short buttonFlags,
-                                      float leftStickX, float leftStickY,
-                                      float rightStickX, float rightStickY,
-                                      float leftTrigger, float rightTrigger) {
+            float leftStickX, float leftStickY,
+            float rightStickX, float rightStickY,
+            float leftTrigger, float rightTrigger) {
         GenericControllerContext context = usbDeviceContexts.get(controllerId);
         if (context == null) {
             return;
@@ -1512,8 +1496,8 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             rightTrigger = 0;
         }
 
-        context.leftTrigger = (byte)(leftTrigger * 0xFF);
-        context.rightTrigger = (byte)(rightTrigger * 0xFF);
+        context.leftTrigger = (byte) (leftTrigger * 0xFF);
+        context.rightTrigger = (byte) (rightTrigger * 0xFF);
 
         context.inputMap = buttonFlags;
 
@@ -1524,7 +1508,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     public void deviceRemoved(AbstractController controller) {
         UsbDeviceContext context = usbDeviceContexts.get(controller.getControllerId());
         if (context != null) {
-            LimeLog.info("Removed controller: "+controller.getControllerId());
+            LimeLog.info("Removed controller: " + controller.getControllerId());
             releaseControllerNumber(context);
             usbDeviceContexts.remove(controller.getControllerId());
         }
@@ -1537,54 +1521,82 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     }
 
     class GenericControllerContext {
+
         public int id;
 
         public float leftStickDeadzoneRadius;
+
         public float rightStickDeadzoneRadius;
+
         public float triggerDeadzone;
 
         public boolean assignedControllerNumber;
+
         public boolean reservedControllerNumber;
+
         public short controllerNumber;
 
         public short inputMap = 0x0000;
+
         public byte leftTrigger = 0x00;
+
         public byte rightTrigger = 0x00;
+
         public short rightStickX = 0x0000;
+
         public short rightStickY = 0x0000;
+
         public short leftStickX = 0x0000;
+
         public short leftStickY = 0x0000;
 
         public boolean mouseEmulationActive;
+
         public Timer mouseEmulationTimer;
+
         public short mouseEmulationLastInputMap;
     }
 
     class InputDeviceContext extends GenericControllerContext {
+
         public String name;
+
         public Vibrator vibrator;
 
         public int leftStickXAxis = -1;
+
         public int leftStickYAxis = -1;
 
         public int rightStickXAxis = -1;
+
         public int rightStickYAxis = -1;
 
         public int leftTriggerAxis = -1;
+
         public int rightTriggerAxis = -1;
+
         public boolean triggersIdleNegative;
+
         public boolean leftTriggerAxisUsed, rightTriggerAxisUsed;
 
         public int hatXAxis = -1;
+
         public int hatYAxis = -1;
 
         public boolean isNonStandardDualShock4;
+
         public boolean usesLinuxGamepadStandardFaceButtons;
+
         public boolean isNonStandardXboxBtController;
+
         public boolean isServal;
+
         public boolean backIsStart;
+
         public boolean modeIsSelect;
+
         public boolean ignoreBack;
+
         public boolean hasJoystickAxes;
 
         public int emulatingButtonFlags = 0;
@@ -1595,12 +1607,23 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // a Start button press to see if we should activate one of our
         // emulated button combos.
         public long lastLbUpTime = 0;
+
         public long lastRbUpTime = 0;
 
         public long startDownTime = 0;
     }
 
     class UsbDeviceContext extends GenericControllerContext {
+
         public AbstractController device;
+    }
+
+    public void addMenuRequestedListener(MenuRequestedListener menuRequestedListener) {
+        menuRequestedListeners.add(menuRequestedListener);
+    }
+
+    public interface MenuRequestedListener {
+
+        public void onMenuRequested();
     }
 }

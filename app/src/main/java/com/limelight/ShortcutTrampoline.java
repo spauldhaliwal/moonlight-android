@@ -416,11 +416,6 @@ public class ShortcutTrampoline extends Activity {
             scalingDivisor = 1.0;
         }
 
-        if (loader != null) {
-            // Cancel operations on the old loader
-//            cancelQueuedOperations();
-        }
-
         this.loader = new CachedAppAssetLoader(computer, scalingDivisor,
                 new NetworkAssetLoader(this, uniqueId),
                 new MemoryAssetLoader(),

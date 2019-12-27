@@ -53,6 +53,7 @@ import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 import com.limelight.binding.PlatformBinding;
 import com.limelight.binding.input.ControllerHandler;
+import com.limelight.binding.input.ControllerHandler.MenuRequestedListener;
 import com.limelight.binding.input.KeyboardTranslator;
 import com.limelight.binding.input.TouchContext;
 import com.limelight.binding.input.capture.InputCaptureManager;
@@ -91,7 +92,7 @@ import java.util.Locale;
 public class Game extends Activity implements SurfaceHolder.Callback,
         OnGenericMotionListener, OnTouchListener, NvConnectionListener, EvdevListener,
         OnSystemUiVisibilityChangeListener, GameGestures, StreamView.InputCallbacks,
-        PerfOverlayListener {
+        PerfOverlayListener, MenuRequestedListener {
 
     private int lastMouseX = Integer.MIN_VALUE;
 
@@ -509,6 +510,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         // Initialize the connection
         conn = new NvConnection(host, uniqueId, config, PlatformBinding.getCryptoProvider(this), serverCert);
         controllerHandler = new ControllerHandler(this, conn, this, prefConfig);
+
+        controllerHandler.addMenuRequestedListener(this);
 
         InputManager inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
         inputManager.registerInputDeviceListener(controllerHandler, null);
@@ -1723,4 +1726,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 })
                 .start();
     }
+
+    @Override
+    public void onMenuRequested() {
+        Toast.makeText(this, "menu request sent to Game activity", Toast.LENGTH_LONG).show();
+    }
+
 }

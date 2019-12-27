@@ -5,6 +5,7 @@ import com.limelight.LimeLog;
 public class NvApp {
     private String appName = "";
     private int appId;
+    private String description = "";
     private boolean initialized;
     private boolean hdrSupported;
     
@@ -57,6 +58,10 @@ public class NvApp {
     
     public boolean isInitialized() {
         return this.initialized;
+    }
+
+    public String getDescription() {
+        return description;
     }
 
     @Override

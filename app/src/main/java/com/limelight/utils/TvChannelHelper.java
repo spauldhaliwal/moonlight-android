@@ -142,6 +142,7 @@ public class TvChannelHelper {
                     .setChannelId(channelId)
                     .setType(TYPE_GAME)
                     .setTitle(app.getAppName())
+                    .setDescription(app.getDescription())
                     .setPosterArtAspectRatio(ASPECT_RATIO_MOVIE_POSTER)
                     .setPosterArtUri(PosterContentProvider.createBoxArtUri(computer.uuid, "" + app.getAppId()))
                     .setIntent(ServerHelper.createAppShortcutIntent(context, computer, app))
@@ -376,6 +377,10 @@ public class TvChannelHelper {
 
         public PreviewProgramBuilder setTitle(String title) {
             mValues.put(TvContract.PreviewPrograms.COLUMN_TITLE, title);
+            return this;
+        }
+        public PreviewProgramBuilder setDescription(String description) {
+            mValues.put(TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION, description);
             return this;
         }
 

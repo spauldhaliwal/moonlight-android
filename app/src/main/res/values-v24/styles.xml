@@ -6,6 +6,9 @@
       me as of Android 7.1
     -->
     <style name="StreamBaseTheme" parent="AppBaseTheme">
+        <item name="android:colorPrimary">@color/black</item>
+        <item name="android:windowAllowReturnTransitionOverlap">true</item>
+        <item name="android:windowAllowEnterTransitionOverlap">true</item>
         <item name="android:windowBackground">@android:color/black</item>
     </style>
 

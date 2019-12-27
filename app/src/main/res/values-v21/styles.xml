@@ -7,6 +7,9 @@
     -->
     <style name="AppBaseTheme" parent="android:Theme.Material">
         <!-- API 21 theme customizations can go here. -->
+        <item name="android:colorPrimary">@color/black</item>
+        <item name="android:windowAllowReturnTransitionOverlap">true</item>
+        <item name="android:windowAllowEnterTransitionOverlap">true</item>
         <item name="android:statusBarColor">#212121</item>
         <item name="android:navigationBarColor">#212121</item>
     </style>

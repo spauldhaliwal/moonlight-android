@@ -1,5 +1,7 @@
 package com.limelight.grid.assets;
 
+import android.animation.Animator;
+import android.animation.Animator.AnimatorListener;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
@@ -10,11 +12,9 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
-
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
-
-import io.alterac.blurkit.BlurKit;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
@@ -24,12 +24,17 @@ import java.util.concurrent.TimeUnit;
 import jp.wasabeef.blurry.Blurry;
 
 public class CachedAppAssetLoader {
+
     private static final int MAX_CONCURRENT_DISK_LOADS = 3;
+
     private static final int MAX_CONCURRENT_NETWORK_LOADS = 3;
+
     private static final int MAX_CONCURRENT_CACHE_LOADS = 1;
 
     private static final int MAX_PENDING_CACHE_LOADS = 100;
+
     private static final int MAX_PENDING_NETWORK_LOADS = 40;
+
     private static final int MAX_PENDING_DISK_LOADS = 40;
 
     private final ThreadPoolExecutor cacheExecutor = new ThreadPoolExecutor(
@@ -51,16 +56,22 @@ public class CachedAppAssetLoader {
             new ThreadPoolExecutor.DiscardOldestPolicy());
 
     private final ComputerDetails computer;
+
     private final double scalingDivider;
+
     private final NetworkAssetLoader networkLoader;
+
     private final MemoryAssetLoader memoryLoader;
+
     private final DiskAssetLoader diskLoader;
+
     private final Bitmap placeholderBitmap;
+
     private final Bitmap noAppImageBitmap;
 
     public CachedAppAssetLoader(ComputerDetails computer, double scalingDivider,
-                                NetworkAssetLoader networkLoader, MemoryAssetLoader memoryLoader,
-                                DiskAssetLoader diskLoader, Bitmap noAppImageBitmap) {
+            NetworkAssetLoader networkLoader, MemoryAssetLoader memoryLoader,
+            DiskAssetLoader diskLoader, Bitmap noAppImageBitmap) {
         this.computer = computer;
         this.scalingDivider = scalingDivider;
         this.networkLoader = networkLoader;
@@ -109,7 +120,8 @@ public class CachedAppAssetLoader {
                 // Close the network input stream
                 try {
                     in.close();
-                } catch (IOException ignored) {}
+                } catch (IOException ignored) {
+                }
 
                 // If there's a task associated with this load, we should return the bitmap
                 if (task != null) {
@@ -118,8 +130,7 @@ public class CachedAppAssetLoader {
                     if (bmp != null) {
                         return bmp;
                     }
-                }
-                else {
+                } else {
                     // Otherwise it's a background load and we return nothing
                     return null;
                 }
@@ -152,7 +163,8 @@ public class CachedAppAssetLoader {
                 // Close the network input stream
                 try {
                     in.close();
-                } catch (IOException ignored) {}
+                } catch (IOException ignored) {
+                }
 
                 // If there's a task associated with this load, we should return the bitmap
                 if (task != null) {
@@ -161,8 +173,7 @@ public class CachedAppAssetLoader {
                     if (bmp != null) {
                         return bmp;
                     }
-                }
-                else {
+                } else {
                     // Otherwise it's a background load and we return nothing
                     return null;
                 }
@@ -180,8 +191,11 @@ public class CachedAppAssetLoader {
     }
 
     private class LoaderTask extends AsyncTask<LoaderTuple, Void, Bitmap> {
+
         private final WeakReference<ImageView> imageViewRef;
+
         private final WeakReference<ProgressBar> progressViewRef;
+
         private final boolean diskOnly;
 
         private LoaderTuple tuple;
@@ -274,9 +288,13 @@ public class CachedAppAssetLoader {
     }
 
     private class LoaderTaskSoft extends AsyncTask<LoaderTuple, Void, Bitmap> {
+
         private final WeakReference<ImageView> imageViewRef;
+
         private final WeakReference<ProgressBar> progressViewRef;
+
         private final boolean diskOnly;
+
         private boolean blurOnEnd;
 
         private LoaderTuple tuple;
@@ -339,7 +357,8 @@ public class CachedAppAssetLoader {
                 // Set off another loader task on the network executor. This time our AsyncDrawable
                 // will use the app image placeholder bitmap, rather than an empty bitmap.
                 LoaderTaskSoft task = new LoaderTaskSoft(imageView, prgView, false, blurOnEnd);
-                AsyncDrawableSoft asyncDrawable = new AsyncDrawableSoft(imageView.getResources(), noAppImageBitmap, task);
+                AsyncDrawableSoft asyncDrawable = new AsyncDrawableSoft(imageView.getResources(), noAppImageBitmap,
+                        task);
                 imageView.setVisibility(View.VISIBLE);
                 imageView.setImageDrawable(asyncDrawable);
                 task.executeOnExecutor(networkExecutor, tuple);
@@ -348,6 +367,7 @@ public class CachedAppAssetLoader {
 
         @Override
         protected void onPostExecute(Bitmap bitmap) {
+            Log.d("CachedAppAssetLoader", "set image with blur starts");
             // Do nothing if cancelled
             if (isCancelled()) {
                 return;
@@ -366,6 +386,22 @@ public class CachedAppAssetLoader {
                                 .async()
                                 .from(bitmap)
                                 .into(imageView);
+
+                        imageView.setAlpha(0f);
+                        imageView.setScaleX(1.3f);
+                        imageView.setScaleY(1.3f);
+                        imageView.setVisibility(View.VISIBLE);
+                        imageView.animate()
+                                .alpha(1)
+                                .setDuration(500L)
+                                .setInterpolator(new FastOutSlowInInterpolator())
+                                .start();
+                        imageView.animate()
+                                .scaleX(1)
+                                .scaleY(1)
+                                .setDuration(7_500L)
+                                .setInterpolator(new FastOutSlowInInterpolator())
+                                .start();
                     } else {
                         Log.d("CachedAppAssetLoader", "set image without blur");
                         imageView.setImageBitmap(bitmap);
@@ -380,14 +416,17 @@ public class CachedAppAssetLoader {
                 // Show the view
                 imageView.setVisibility(View.VISIBLE);
             }
+            Log.d("CachedAppAssetLoader", "set image with blur ends");
         }
+
     }
 
     static class AsyncDrawable extends BitmapDrawable {
+
         private final WeakReference<LoaderTask> loaderTaskReference;
 
         public AsyncDrawable(Resources res, Bitmap bitmap,
-                             LoaderTask loaderTask) {
+                LoaderTask loaderTask) {
             super(res, bitmap);
             loaderTaskReference = new WeakReference<>(loaderTask);
         }
@@ -398,6 +437,7 @@ public class CachedAppAssetLoader {
     }
 
     static class AsyncDrawableSoft extends BitmapDrawable {
+
         private final WeakReference<LoaderTaskSoft> loaderTaskReference;
 
         public AsyncDrawableSoft(Resources res, Bitmap bitmap,
@@ -521,13 +561,14 @@ public class CachedAppAssetLoader {
         return false;
     }
 
-    public boolean populateImageViewSoft(NvApp app, ImageView imgView, ProgressBar prgView, boolean blurOnEnd) {
+    public boolean populateImageViewSoft(NvApp app, final ImageView imageView, ProgressBar prgView, boolean blurOnEnd) {
+        Log.d("CachedAppAssetLoader", "start loading image for blur");
         LoaderTuple tuple = new LoaderTuple(computer, app);
 
         // If there's already a task in progress for this view,
         // cancel it. If the task is already loading the same image,
         // we return and let that load finish.
-        if (!cancelPendingLoad(tuple, imgView)) {
+        if (!cancelPendingLoad(tuple, imageView)) {
             return true;
         }
 
@@ -538,18 +579,39 @@ public class CachedAppAssetLoader {
         Bitmap bmp = memoryLoader.loadBitmapFromCache(tuple);
         if (bmp != null) {
             // Show the bitmap immediately
-            Bitmap bmpToLoad = bmp.copy(Config.RGB_565, false);
-            imgView.setVisibility(View.VISIBLE);
-            imgView.setImageBitmap(bmpToLoad);
+            Bitmap bitmap = bmp.copy(Config.RGB_565, false);
+            Blurry.with(imageView.getContext())
+                    .radius(20)
+                    .sampling(8)
+                    .async()
+                    .from(bitmap)
+                    .into(imageView);
+
+            imageView.setAlpha(0f);
+            imageView.setScaleX(1.3f);
+            imageView.setScaleY(1.3f);
+            imageView.setVisibility(View.VISIBLE);
+            imageView.animate()
+                    .alpha(1)
+                    .setDuration(500L)
+                    .setInterpolator(new FastOutSlowInInterpolator())
+                    .start();
+            imageView.animate()
+                    .scaleX(1)
+                    .scaleY(1)
+                    .setDuration(7_500L)
+                    .setInterpolator(new FastOutSlowInInterpolator())
+                    .start();
             return true;
         }
 
         // If it's not in memory, create an async task to load it. This task will be attached
         // via AsyncDrawable to this view.
-        final LoaderTaskSoft task = new LoaderTaskSoft(imgView, prgView, true, blurOnEnd);
-        final AsyncDrawableSoft asyncDrawable = new AsyncDrawableSoft(imgView.getResources(), placeholderBitmap, task);
-        imgView.setVisibility(View.INVISIBLE);
-        imgView.setImageDrawable(asyncDrawable);
+        final LoaderTaskSoft task = new LoaderTaskSoft(imageView, prgView, false, blurOnEnd);
+        final AsyncDrawableSoft asyncDrawable = new AsyncDrawableSoft(imageView.getResources(), placeholderBitmap,
+                task);
+        imageView.setVisibility(View.INVISIBLE);
+        imageView.setImageDrawable(asyncDrawable);
 
         // Run the task on our foreground executor
         task.executeOnExecutor(foregroundExecutor, tuple);
@@ -557,7 +619,9 @@ public class CachedAppAssetLoader {
     }
 
     public class LoaderTuple {
+
         public final ComputerDetails computer;
+
         public final NvApp app;
 
         public LoaderTuple(ComputerDetails computer, NvApp app) {
@@ -577,7 +641,7 @@ public class CachedAppAssetLoader {
 
         @Override
         public String toString() {
-            return "("+computer.uuid+", "+app.getAppId()+")";
+            return "(" + computer.uuid + ", " + app.getAppId() + ")";
         }
     }
 }
