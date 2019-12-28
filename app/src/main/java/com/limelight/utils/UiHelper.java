@@ -239,7 +239,7 @@ public class UiHelper {
     public static void hideView(final View view) {
         view.animate()
                 .alpha(0f)
-                .setDuration(500L)
+                .setDuration(250L)
                 .setInterpolator(new FastOutSlowInInterpolator())
                 .setListener(new AnimatorListener() {
                     @Override
@@ -248,7 +248,7 @@ public class UiHelper {
 
                     @Override
                     public void onAnimationEnd(final Animator animation) {
-                        view.setVisibility(View.GONE);
+//                        view.setVisibility(View.GONE);
                     }
 
                     @Override

@@ -20,6 +20,7 @@ import android.content.res.Configuration;
 import android.graphics.BitmapFactory;
 import android.graphics.Point;
 import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.hardware.input.InputManager;
 import android.media.AudioManager;
 import android.net.ConnectivityManager;
@@ -89,6 +90,8 @@ import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.ui.GameGestures;
 import com.limelight.ui.StreamView;
 import com.limelight.utils.Dialog;
+import com.limelight.utils.KeyboardUtils;
+import com.limelight.utils.KeyboardUtils.SoftKeyboardToggleListener;
 import com.limelight.utils.NetHelper;
 import com.limelight.utils.ServerHelper;
 import com.limelight.utils.ServerHelper.QuitAppListener;
@@ -110,6 +113,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private int appId;
 
     private FrameLayout blackoutView;
+
+    private Boolean keyboardIsVisible;
 
     private FrameLayout posterFrame;
 
@@ -232,8 +237,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     private static final int LARGE_WIDTH_DP = 150;
 
-    ConstraintLayout overlayLayout;
-
     private CachedAppAssetLoader loader;
 
     private ComputerManagerService.ComputerManagerBinder managerBinder;
@@ -273,6 +276,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     ProgressBar overlayStatusSpinner;
 
+    ConstraintLayout overlayLayout;
+
     private LinearLayout optionsBtn;
 
     private LinearLayout quitGameBtn;
@@ -280,6 +285,14 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private LinearLayout resumeBtn;
 
     private LinearLayout toggleMouseBtn;
+
+    private TextView toggleMouseTitle;
+
+    private ImageView toggleMouseIcon;
+
+    private Drawable mouseOnDrawable;
+
+    private Drawable mouseOffDrawable;
 
     private ImageView overlayPoster;
 
@@ -665,7 +678,13 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         osdMenu = findViewById(R.id.activityGame_overlay_menuLayout_linearLayout);
         osdMenuContainer = findViewById(R.id.activityGame_overlay_menubg_frameLayout);
         resumeBtn = findViewById(R.id.activityGame_overlay_menuLayout_resumeMenuItem);
+
         toggleMouseBtn = findViewById(R.id.activityGame_overlay_menuLayout_toggleMouseMenuItem);
+        toggleMouseTitle = findViewById(R.id.activityGame_overlay_menuLayout_toggleMouseMenuItem_title_textView);
+        toggleMouseIcon = findViewById(R.id.activityGame_overlay_menuLayout_toggleMouseMenuItem_icon_imageView);
+        mouseOnDrawable = getDrawable(R.drawable.ic_mouse);
+        mouseOffDrawable = getDrawable(R.drawable.ic_mouse_off);
+
         optionsBtn = findViewById(R.id.activityGame_overlay_menuLayout_optionsMenuItem);
         quitGameBtn = findViewById(R.id.activityGame_overlay_menuLayout_quitGameMenuItem);
 
@@ -688,13 +707,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         toggleMouseBtn.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(final View v) {
-                Toast.makeText(v.getContext(), "toggle mouse button clicked", Toast.LENGTH_SHORT).show();
+                toggleStreamingOsd();
+                controllerHandler.toggleMouse();
             }
         });
 
         optionsBtn.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(final View v) {
+//                toggleStreamingOsd();
                 showKeyboard();
             }
         });
@@ -710,6 +731,19 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         setupAssetLoader(uuidString, this.computer);
         // The connection will be started when the surface gets created
         streamView.getHolder().addCallback(this);
+
+        KeyboardUtils.addKeyboardToggleListener(this, new SoftKeyboardToggleListener() {
+            @Override
+            public void onToggleSoftKeyboard(final boolean isVisible) {
+                if (isVisible) {
+                    UiHelper.hideView(overlayLayout);
+                } else {
+                    UiHelper.showView(overlayLayout);
+                    resumeBtn.requestFocus();
+                }
+                keyboardIsVisible = isVisible;
+            }
+        });
 
     }
 
@@ -1170,9 +1204,17 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     }
 
     @Override
+    public boolean dispatchKeyEvent(final KeyEvent event) {
+        Log.d("ControllerHandler", "keycode: " + event.getKeyCode());
+        return super.dispatchKeyEvent(event);
+    }
+
+    @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         return handleKeyDown(event) || super.onKeyDown(keyCode, event);
     }
+
+
 
     @Override
     public boolean handleKeyDown(KeyEvent event) {
@@ -1200,30 +1242,32 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             handled = controllerHandler.handleButtonDown(event);
         }
 
-//        if (!handled) {
-//            // Try the keyboard handler
-//            short translated = KeyboardTranslator.translate(event.getKeyCode());
-//            if (translated == 0) {
-//                return false;
-//            }
-//
-//            // Let this method take duplicate key down events
-//            if (handleSpecialKeys(event.getKeyCode(), true)) {
-//                return true;
-//            }
-//
-//            // Pass through keyboard input if we're not grabbing
-//            if (!grabbedInput) {
-//                return false;
-//            }
-//
-//            byte modifiers = getModifierState(event);
-//            if (KeyboardTranslator.needsShift(event.getKeyCode())) {
-//                modifiers |= KeyboardPacket.MODIFIER_SHIFT;
-//                conn.sendKeyboardInput((short) 0x8010, KeyboardPacket.KEY_DOWN, modifiers);
-//            }
-//            conn.sendKeyboardInput(translated, KeyboardPacket.KEY_DOWN, modifiers);
-//        }
+        if (!handled && keyboardIsVisible) {
+
+            // Try the keyboard handler
+            short translated = KeyboardTranslator.translate(event.getKeyCode());
+            if (translated == 0) {
+                return false;
+            }
+
+            // Let this method take duplicate key down events
+            if (handleSpecialKeys(event.getKeyCode(), true)) {
+                return true;
+            }
+
+            // Pass through keyboard input if we're not grabbing
+            if (!grabbedInput) {
+                return false;
+            }
+
+            byte modifiers = getModifierState(event);
+            if (KeyboardTranslator.needsShift(event.getKeyCode())) {
+                modifiers |= KeyboardPacket.MODIFIER_SHIFT;
+                conn.sendKeyboardInput((short) 0x8010, KeyboardPacket.KEY_DOWN, modifiers);
+            }
+            Log.d("GameActivity", "keyboard value sent: " + translated);
+            conn.sendKeyboardInput(translated, KeyboardPacket.KEY_DOWN, modifiers);
+        }
 
         return handled;
     }
@@ -1943,6 +1987,21 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     }
 
     private void toggleStreamingOsd() {
+        if (controllerHandler.mouseEnabled) {
+            toggleMouseTitle.setText("Disable mouse");
+            if (mouseOnDrawable != null) {
+                toggleMouseIcon.setImageDrawable(mouseOffDrawable);
+            } else {
+                toggleMouseIcon.setImageDrawable(getDrawable(R.drawable.ic_mouse_off));
+            }
+        } else if (!controllerHandler.mouseEnabled) {
+            toggleMouseTitle.setText("Enable mouse");
+            if (mouseOnDrawable != null) {
+                toggleMouseIcon.setImageDrawable(mouseOnDrawable);
+            } else {
+                toggleMouseIcon.setImageDrawable(getDrawable(R.drawable.ic_mouse));
+            }
+        }
         if (overlayLayout.getVisibility() != View.VISIBLE) {
             controllerHandler.streamingOsdIsVisible = true;
             resumeBtn.requestFocus();

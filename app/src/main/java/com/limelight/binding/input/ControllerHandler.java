@@ -1,5 +1,6 @@
 package com.limelight.binding.input;
 
+import android.app.Activity;
 import android.content.Context;
 import android.hardware.input.InputManager;
 import android.hardware.usb.UsbDevice;
@@ -25,6 +26,8 @@ import com.limelight.nvstream.input.ControllerPacket;
 import com.limelight.nvstream.input.MouseButtonPacket;
 import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.ui.GameGestures;
+import com.limelight.utils.KeyboardUtils;
+import com.limelight.utils.KeyboardUtils.SoftKeyboardToggleListener;
 import com.limelight.utils.Vector2d;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
@@ -53,6 +56,12 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     private final Vector2d inputVector = new Vector2d();
 
     private final SparseArray<InputDeviceContext> inputDeviceContexts = new SparseArray<>();
+
+    private Boolean keyboardIsVisible;
+
+    private InputDeviceContext mouseContext;
+
+    public Boolean mouseEnabled = false;
 
     private final SparseArray<UsbDeviceContext> usbDeviceContexts = new SparseArray<>();
 
@@ -141,6 +150,13 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         // currentControllers set which will allow them to properly unplug
         // if they are removed.
         initialControllers = getAttachedControllerMask(activityContext);
+
+        KeyboardUtils.addKeyboardToggleListener((Activity) activityContext, new SoftKeyboardToggleListener() {
+            @Override
+            public void onToggleSoftKeyboard(final boolean isVisible) {
+                keyboardIsVisible = isVisible;
+            }
+        });
     }
 
     private static InputDevice.MotionRange getMotionRangeForJoystickAxis(InputDevice dev, int axis) {
@@ -800,7 +816,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             }
         }
 
-            if (context.usesLinuxGamepadStandardFaceButtons) {
+        if (context.usesLinuxGamepadStandardFaceButtons) {
             // Android's Generic.kl swaps BTN_NORTH and BTN_WEST
             switch (event.getScanCode()) {
                 case 304:
@@ -1105,6 +1121,10 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             return true;
         }
 
+        if (keyboardIsVisible) {
+            return false;
+        }
+
         float lsX = 0, lsY = 0, rsX = 0, rsY = 0, rt = 0, lt = 0, hatX = 0, hatY = 0;
 
         // We purposefully ignore the historical values in the motion event as it makes
@@ -1161,7 +1181,8 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         }
 
         context.mouseEmulationActive = !context.mouseEmulationActive;
-        Toast.makeText(activityContext, "Mouse emulation is: " + (context.mouseEmulationActive ? "ON" : "OFF"),
+        mouseEnabled = context.mouseEmulationActive;
+        Toast.makeText(activityContext, "Mouse is " + (context.mouseEmulationActive ? "enabled" : "disabled"),
                 Toast.LENGTH_SHORT).show();
 
         if (context.mouseEmulationActive) {
@@ -1174,6 +1195,12 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                     sendEmulatedMouseEvent(context.rightStickX, context.rightStickY);
                 }
             }, 50, 50);
+        }
+    }
+
+    public void toggleMouse() {
+        if (mouseContext != null) {
+            toggleMouseEmulation(mouseContext);
         }
     }
 
@@ -1265,6 +1292,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     }
 
     public boolean handleButtonUp(KeyEvent event) {
+        Log.d("ControllerHandler", "keycode: " + event.getKeyCode());
         InputDeviceContext context = getContextForEvent(event);
         if (context == null) {
             return true;
@@ -1285,6 +1313,10 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                 Thread.sleep(ControllerHandler.MINIMUM_BUTTON_DOWN_TIME_MS);
             } catch (InterruptedException ignored) {
             }
+        }
+
+        if (keyboardIsVisible) {
+            return false;
         }
 
         if (streamingOsdIsVisible) {
@@ -1403,6 +1435,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     }
 
     public boolean handleButtonDown(KeyEvent event) {
+        Log.d("ControllerHandler", "keycode: " + event.getKeyCode());
         InputDeviceContext context = getContextForEvent(event);
         if (context == null) {
             return true;
@@ -1411,6 +1444,10 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         int keyCode = handleRemapping(context, event);
         if (keyCode == 0) {
             return true;
+        }
+
+        if (keyboardIsVisible) {
+            return false;
         }
 
         // Handle keymap when Streaming OSD is open
@@ -1469,6 +1506,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                     context.startDownTime = SystemClock.uptimeMillis();
                 }
                 if (event.isLongPress()) {
+                    mouseContext = getContextForEvent(event);
                     for (MenuRequestedListener listener : menuRequestedListeners) {
                         listener.onMenuRequested();
                     }
@@ -1742,6 +1780,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     }
 
     public interface MenuNavigationListener {
+
         void onMenuKeyPassedThrough(int keycode);
     }
 

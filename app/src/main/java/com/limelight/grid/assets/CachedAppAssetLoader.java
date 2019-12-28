@@ -389,8 +389,8 @@ public class CachedAppAssetLoader {
                                 .into(imageView);
 
                         imageView.setAlpha(0f);
-                        imageView.setScaleX(1.3f);
-                        imageView.setScaleY(1.3f);
+                        imageView.setScaleX(2f);
+                        imageView.setScaleY(2f);
                         imageView.setVisibility(View.VISIBLE);
                         imageView.animate()
                                 .alpha(1)
@@ -400,7 +400,7 @@ public class CachedAppAssetLoader {
                         imageView.animate()
                                 .scaleX(1)
                                 .scaleY(1)
-                                .setDuration(7_500L)
+                                .setDuration(15_000L)
                                 .setInterpolator(new FastOutSlowInInterpolator())
                                 .start();
                     } else {
@@ -589,8 +589,8 @@ public class CachedAppAssetLoader {
                     .into(imageView);
 
             imageView.setAlpha(0f);
-            imageView.setScaleX(1.3f);
-            imageView.setScaleY(1.3f);
+            imageView.setScaleX(2f);
+            imageView.setScaleY(2f);
             imageView.setVisibility(View.VISIBLE);
             imageView.animate()
                     .alpha(1)
@@ -600,7 +600,7 @@ public class CachedAppAssetLoader {
             imageView.animate()
                     .scaleX(1)
                     .scaleY(1)
-                    .setDuration(7_500L)
+                    .setDuration(15_000L)
                     .setInterpolator(new FastOutSlowInInterpolator())
                     .start();
             return true;

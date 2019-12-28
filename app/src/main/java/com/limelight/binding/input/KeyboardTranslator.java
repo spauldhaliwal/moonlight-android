@@ -23,7 +23,7 @@ public class KeyboardTranslator {
     public static final int VK_CAPS_LOCK = 20;
     public static final int VK_CLEAR = 12;
     public static final int VK_COMMA = 44;
-    public static final int VK_BACK_SPACE = 8;
+    public static final int VK_BACK_SPACE = -32760;
     public static final int VK_EQUALS = 61;
     public static final int VK_ESCAPE = 27;
     public static final int VK_F1 = 112;

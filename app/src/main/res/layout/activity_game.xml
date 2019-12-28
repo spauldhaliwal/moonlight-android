@@ -75,7 +75,7 @@
 
             <LinearLayout
                 android:id="@+id/activityGame_overlay_menuLayout_linearLayout"
-                android:layout_width="140dp"
+                android:layout_width="wrap_content"
                 android:layout_height="match_parent"
                 android:clipChildren="true"
                 android:clipToPadding="true"
@@ -125,6 +125,7 @@
                     android:tint="@drawable/menu_button_selector">
 
                     <ImageView
+                        android:id="@+id/activityGame_overlay_menuLayout_toggleMouseMenuItem_icon_imageView"
                         android:layout_width="16dp"
                         android:layout_height="16dp"
                         android:layout_gravity="center"
@@ -132,11 +133,12 @@
                         android:src="@drawable/ic_mouse" />
 
                     <TextView
+                        android:id="@+id/activityGame_overlay_menuLayout_toggleMouseMenuItem_title_textView"
                         android:layout_width="wrap_content"
                         android:layout_height="match_parent"
                         android:fontFamily="@font/metropolis_medium"
                         android:gravity="center"
-                        android:text="Toggle Mouse"
+                        android:text="Enable mouse"
                         android:textColor="@color/white"
                         android:textSize="11sp" />
                 </LinearLayout>
@@ -158,14 +160,14 @@
                         android:layout_height="18dp"
                         android:layout_gravity="center"
                         android:layout_marginEnd="12dp"
-                        android:src="@drawable/ic_dots_horizontal" />
+                        android:src="@drawable/ic_keyboard" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="match_parent"
                         android:fontFamily="@font/metropolis_medium"
                         android:gravity="center"
-                        android:text="Options"
+                        android:text="Show keyboard"
                         android:textColor="@color/white"
                         android:textSize="11sp" />
                 </LinearLayout>
