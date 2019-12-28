@@ -47,6 +47,8 @@ import java.util.UUID;
 
 public class ShortcutTrampoline extends Activity {
 
+    private ProgressBar statusProgress;
+
     private String uuidString;
 
     private NvApp app;
@@ -364,6 +366,8 @@ public class ShortcutTrampoline extends Activity {
             // Bind to the computer manager service
             bindService();
 
+            statusProgress = findViewById(R.id.activityGameLoader_status_progressBar);
+
             statusMessageTextView = findViewById(R.id.activityGameLoader_status_textView);
 
             setStatusMessage(getResources().getString(R.string.conn_establishing_title));
@@ -374,6 +378,9 @@ public class ShortcutTrampoline extends Activity {
     }
 
     public void setStatusMessage(final String msg) {
+        if (statusProgress.getVisibility() != View.VISIBLE) {
+            UiHelper.showView(statusProgress);
+        }
         if (statusMessageTextView != null) {
             statusMessageTextView.animate()
                     .alpha(0)

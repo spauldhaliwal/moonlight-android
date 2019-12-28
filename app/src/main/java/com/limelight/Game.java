@@ -46,8 +46,6 @@ import android.view.View.OnSystemUiVisibilityChangeListener;
 import android.view.View.OnTouchListener;
 import android.view.Window;
 import android.view.WindowManager;
-import android.view.animation.AccelerateInterpolator;
-import android.view.animation.LinearInterpolator;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
@@ -697,7 +695,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         optionsBtn.setOnClickListener(new OnClickListener() {
             @Override
             public void onClick(final View v) {
-                Toast.makeText(v.getContext(), "option  button clicked", Toast.LENGTH_SHORT).show();
+                showKeyboard();
             }
         });
 
