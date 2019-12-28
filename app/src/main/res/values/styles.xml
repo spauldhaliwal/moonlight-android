@@ -17,6 +17,27 @@
         <item name="android:windowAllowEnterTransitionOverlap">true</item>
     </style>
 
+    <style name="btn_osd_menu_top" parent="AppBaseTheme">
+        <item name="android:background">@drawable/menu_button_selector_top</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingLeft">18dp</item>
+    </style>
+
+    <style name="btn_osd_menu" parent="AppBaseTheme">
+        <item name="android:background">@drawable/menu_button_selector</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingLeft">18dp</item>
+    </style>
+
+    <style name="btn_osd_menu_bottom" parent="AppBaseTheme">
+        <item name="android:background">@drawable/menu_button_selector_bottom</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingLeft">18dp</item>
+    </style>
+
     <!-- Application theme. -->
     <style name="AppTheme" parent="AppBaseTheme">
         <!-- All customizations that are NOT specific to a particular API-level can go here. -->

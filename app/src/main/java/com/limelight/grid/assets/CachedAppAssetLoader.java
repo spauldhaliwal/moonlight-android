@@ -69,6 +69,7 @@ public class CachedAppAssetLoader {
 
     private final Bitmap noAppImageBitmap;
 
+
     public CachedAppAssetLoader(ComputerDetails computer, double scalingDivider,
             NetworkAssetLoader networkLoader, MemoryAssetLoader memoryLoader,
             DiskAssetLoader diskLoader, Bitmap noAppImageBitmap) {
@@ -643,5 +644,9 @@ public class CachedAppAssetLoader {
         public String toString() {
             return "(" + computer.uuid + ", " + app.getAppId() + ")";
         }
+    }
+
+    public interface BitmapLoadListener {
+        void onBitmapLoadSuccess(Bitmap bitmap);
     }
 }

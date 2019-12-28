@@ -36,7 +36,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
     private static final int MAXIMUM_BUMPER_UP_DELAY_MS = 100;
 
-    private static final int START_DOWN_TIME_MOUSE_MODE_MS = 750;
+    private static final int START_DOWN_TIME_STREAM_CONTROLS = 500;
 
     private static final int MINIMUM_BUTTON_DOWN_TIME_MS = 25;
 
@@ -47,6 +47,8 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     private static final int EMULATED_SPECIAL_UP_DELAY_MS = 100;
 
     private static final int EMULATED_SELECT_UP_DELAY_MS = 30;
+
+    public boolean streamingOsdIsVisible = false;
 
     private final Vector2d inputVector = new Vector2d();
 
@@ -70,6 +72,8 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
     private List<MenuRequestedListener> menuRequestedListeners;
 
+    private List<MenuNavigationListener> menuNavigationListeners;
+
     private final PreferenceConfiguration prefConfig;
 
     private short currentControllers, initialControllers;
@@ -87,6 +91,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         int deadzonePercentage = 7;
 
         menuRequestedListeners = new ArrayList<>();
+        menuNavigationListeners = new ArrayList<>();
 
         int[] ids = InputDevice.getDeviceIds();
         for (int id : ids) {
@@ -788,13 +793,14 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     // Device MAY BE NULL
     private int handleRemapping(InputDeviceContext context, KeyEvent event) {
         // Don't capture the back button if configured
+
         if (context.ignoreBack) {
             if (event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
                 return -1;
             }
         }
 
-        if (context.usesLinuxGamepadStandardFaceButtons) {
+            if (context.usesLinuxGamepadStandardFaceButtons) {
             // Android's Generic.kl swaps BTN_NORTH and BTN_WEST
             switch (event.getScanCode()) {
                 case 304:
@@ -965,6 +971,62 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
     private void handleAxisSet(InputDeviceContext context, float lsX, float lsY, float rsX,
             float rsY, float lt, float rt, float hatX, float hatY) {
 
+        if (streamingOsdIsVisible) {
+            if (context.hatXAxis != -1 && context.hatYAxis != -1) {
+                context.inputMap &= ~(ControllerPacket.LEFT_FLAG | ControllerPacket.RIGHT_FLAG);
+                if (hatX < -0.5) {
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_LEFT);
+                    }
+                } else if (hatX > 0.5) {
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_RIGHT);
+                    }
+                }
+
+                context.inputMap &= ~(ControllerPacket.UP_FLAG | ControllerPacket.DOWN_FLAG);
+                if (hatY < -0.5) {
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_UP);
+                    }
+                } else if (hatY > 0.5) {
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_DOWN);
+                    }
+                }
+            }
+
+            if (context.leftStickXAxis != -1 && context.leftStickYAxis != -1) {
+                Vector2d leftStickVector = populateCachedVector(lsX, lsY);
+
+                handleDeadZone(leftStickVector, context.leftStickDeadzoneRadius);
+
+                context.leftStickX = (short) (leftStickVector.getX() * 0x7FFE);
+                context.leftStickY = (short) (-leftStickVector.getY() * 0x7FFE);
+
+                if (context.leftStickX < -1000) {
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_LEFT);
+                    }
+                } else if (context.leftStickX > 1000) {
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_RIGHT);
+                    }
+                }
+
+                if (context.leftStickY < -1000) {
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_DOWN);
+                    }
+                } else if (context.leftStickY > 1000) {
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_UP);
+                    }
+                }
+            }
+            return;
+        }
+
         if (context.leftStickXAxis != -1 && context.leftStickYAxis != -1) {
             Vector2d leftStickVector = populateCachedVector(lsX, lsY);
 
@@ -1017,16 +1079,20 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
         if (context.hatXAxis != -1 && context.hatYAxis != -1) {
             context.inputMap &= ~(ControllerPacket.LEFT_FLAG | ControllerPacket.RIGHT_FLAG);
             if (hatX < -0.5) {
+                Log.d("ControllerHandler", "left pressed");
                 context.inputMap |= ControllerPacket.LEFT_FLAG;
             } else if (hatX > 0.5) {
+                Log.d("ControllerHandler", "right pressed");
                 context.inputMap |= ControllerPacket.RIGHT_FLAG;
             }
 
             context.inputMap &= ~(ControllerPacket.UP_FLAG | ControllerPacket.DOWN_FLAG);
             if (hatY < -0.5) {
                 context.inputMap |= ControllerPacket.UP_FLAG;
+                Log.d("ControllerHandler", "up pressed");
             } else if (hatY > 0.5) {
                 context.inputMap |= ControllerPacket.DOWN_FLAG;
+                Log.d("ControllerHandler", "down pressed");
             }
         }
 
@@ -1221,6 +1287,10 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             }
         }
 
+        if (streamingOsdIsVisible) {
+            return false;
+        }
+
         switch (keyCode) {
             case KeyEvent.KEYCODE_BUTTON_MODE:
                 context.inputMap &= ~ControllerPacket.SPECIAL_BUTTON_FLAG;
@@ -1228,7 +1298,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
             case KeyEvent.KEYCODE_BUTTON_START:
             case KeyEvent.KEYCODE_MENU:
                 if (SystemClock.uptimeMillis() - context.startDownTime
-                        < ControllerHandler.START_DOWN_TIME_MOUSE_MODE_MS
+                        < ControllerHandler.START_DOWN_TIME_STREAM_CONTROLS
                 ) {
                     context.inputMap |= ControllerPacket.PLAY_FLAG;
                 }
@@ -1340,6 +1410,50 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
         int keyCode = handleRemapping(context, event);
         if (keyCode == 0) {
+            return true;
+        }
+
+        // Handle keymap when Streaming OSD is open
+        if (streamingOsdIsVisible) {
+            switch (keyCode) {
+                case KeyEvent.KEYCODE_BUTTON_START:
+                case KeyEvent.KEYCODE_MENU:
+                    context.inputMap = 0;
+                    if (event.getRepeatCount() == 0) {
+                        context.startDownTime = SystemClock.uptimeMillis();
+                    }
+                    if (event.isLongPress()) {
+                        for (MenuRequestedListener listener : menuRequestedListeners) {
+                            listener.onMenuRequested();
+                        }
+                    }
+                    break;
+                case KeyEvent.KEYCODE_DPAD_LEFT:
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_LEFT);
+                    }
+                    break;
+                case KeyEvent.KEYCODE_DPAD_RIGHT:
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_RIGHT);
+                    }
+                    context.inputMap |= ControllerPacket.RIGHT_FLAG;
+                    break;
+                case KeyEvent.KEYCODE_DPAD_UP:
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_UP);
+                    }
+                    context.inputMap |= ControllerPacket.UP_FLAG;
+                    break;
+                case KeyEvent.KEYCODE_DPAD_DOWN:
+                    for (MenuNavigationListener listener : menuNavigationListeners) {
+                        listener.onMenuKeyPassedThrough(KeyEvent.KEYCODE_DPAD_DOWN);
+                    }
+                    context.inputMap |= ControllerPacket.DOWN_FLAG;
+                default:
+                    return false;
+            }
+
             return true;
         }
 
@@ -1624,6 +1738,14 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
 
     public interface MenuRequestedListener {
 
-        public void onMenuRequested();
+        void onMenuRequested();
+    }
+
+    public interface MenuNavigationListener {
+        void onMenuKeyPassedThrough(int keycode);
+    }
+
+    public void addMenuNavigationListener(MenuNavigationListener menuNavigationListener) {
+        menuNavigationListeners.add(menuNavigationListener);
     }
 }

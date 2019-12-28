@@ -1,8 +1,9 @@
 package com.limelight.nvstream.http;
 
 import com.limelight.LimeLog;
+import java.io.Serializable;
 
-public class NvApp {
+public class NvApp implements Serializable {
     private String appName = "";
     private int appId;
     private String description = "";

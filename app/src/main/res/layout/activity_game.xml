@@ -1,6 +1,6 @@
 <merge xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".Game">
@@ -15,32 +15,231 @@
         android:id="@+id/performanceOverlay"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginLeft="10dp"
-        android:layout_marginStart="10dp"
-        android:layout_marginTop="10dp"
         android:layout_gravity="left"
-        android:textAppearance="?android:attr/textAppearanceSmall"
-        android:gravity="left"
+        android:layout_marginStart="10dp"
+        android:layout_marginLeft="10dp"
+        android:layout_marginTop="10dp"
         android:background="#80000000"
+        android:gravity="left"
+        android:textAppearance="?android:attr/textAppearanceSmall"
         android:visibility="gone" />
 
     <TextView
         android:id="@+id/notificationOverlay"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginRight="10dp"
-        android:layout_marginEnd="10dp"
-        android:layout_marginTop="10dp"
         android:layout_gravity="right"
-        android:textAppearance="?android:attr/textAppearanceLarge"
-        android:gravity="right"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="10dp"
+        android:layout_marginRight="10dp"
         android:background="#80000000"
+        android:gravity="right"
+        android:textAppearance="?android:attr/textAppearanceLarge"
         android:visibility="gone" />
+
+
+    <FrameLayout
+        android:id="@+id/blackoutFrame_frameLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/black"
+        android:visibility="gone"/>
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/activityGame_overlay_layout"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        tools:visibility="visible">
+
+        <FrameLayout
+            android:id="@+id/activityGame_overlay_bgGradient_frameLayout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/gradient_overlay_game_menu"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <FrameLayout
+            android:id="@+id/activityGame_overlay_menubg_frameLayout"
+            android:layout_width="wrap_content"
+            android:layout_height="0dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            android:background="@drawable/osd_menu_bg"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="@+id/activityGame_overlay_posterFrame_frameLayout"
+            app:layout_constraintStart_toEndOf="@+id/activityGame_overlay_posterFrame_frameLayout"
+            app:layout_constraintTop_toTopOf="@+id/activityGame_overlay_posterFrame_frameLayout"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:id="@+id/activityGame_overlay_menuLayout_linearLayout"
+                android:layout_width="140dp"
+                android:layout_height="match_parent"
+                android:clipChildren="true"
+                android:clipToPadding="true"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/activityGame_overlay_menuLayout_resumeMenuItem"
+                    style="@style/btn_osd_menu_top"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:focusedByDefault="true"
+                    android:nextFocusUp="@id/activityGame_overlay_menuLayout_quitGameMenuItem"
+                    android:nextFocusDown="@id/activityGame_overlay_menuLayout_toggleMouseMenuItem"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="center"
+                        android:layout_marginEnd="12dp"
+                        android:src="@drawable/ic_play" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:fontFamily="@font/metropolis_medium"
+                        android:gravity="center"
+                        android:text="Resume"
+                        android:textColor="@color/white"
+                        android:textSize="11sp" />
+
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/activityGame_overlay_menuLayout_toggleMouseMenuItem"
+                    style="@style/btn_osd_menu"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:nextFocusUp="@id/activityGame_overlay_menuLayout_resumeMenuItem"
+                    android:orientation="horizontal"
+                    android:tint="@drawable/menu_button_selector">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_gravity="center"
+                        android:layout_marginEnd="14dp"
+                        android:src="@drawable/ic_mouse" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:fontFamily="@font/metropolis_medium"
+                        android:gravity="center"
+                        android:text="Toggle Mouse"
+                        android:textColor="@color/white"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/activityGame_overlay_menuLayout_optionsMenuItem"
+                    style="@style/btn_osd_menu"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:nextFocusUp="@id/activityGame_overlay_menuLayout_toggleMouseMenuItem"
+                    android:nextFocusDown="@id/activityGame_overlay_menuLayout_quitGameMenuItem"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_gravity="center"
+                        android:layout_marginEnd="12dp"
+                        android:src="@drawable/ic_dots_horizontal" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:fontFamily="@font/metropolis_medium"
+                        android:gravity="center"
+                        android:text="Options"
+                        android:textColor="@color/white"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/activityGame_overlay_menuLayout_quitGameMenuItem"
+                    style="@style/btn_osd_menu_bottom"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true"
+                    android:nextFocusUp="@id/activityGame_overlay_menuLayout_optionsMenuItem"
+                    android:nextFocusDown="@id/activityGame_overlay_menuLayout_resumeMenuItem"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:layout_marginEnd="12dp"
+                        android:src="@drawable/ic_quit" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:fontFamily="@font/metropolis_medium"
+                        android:gravity="center"
+                        android:text="Quit Game"
+                        android:textColor="@color/white"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+            </LinearLayout>
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/activityGame_overlay_posterFrame_frameLayout"
+            android:layout_width="140dp"
+            android:layout_height="196dp"
+            android:layout_marginStart="80dp"
+            android:layout_marginBottom="100dp"
+            android:background="@drawable/rounded_corner_background"
+            android:elevation="40dp"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            tools:visibility="visible">
+
+            <ImageView
+                android:id="@+id/activityGame_overlay_poster_imageView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:elevation="40dp"
+                android:scaleType="fitXY"
+                android:visibility="gone"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                tools:background="@drawable/rounded_corner_background_white"
+                tools:visibility="visible" />
+
+        </FrameLayout>
+
+        <ProgressBar
+            android:id="@+id/activityGame_poster_progress"
+            android:layout_width="13dp"
+            android:layout_height="13dp"
+            android:elevation="40dp"
+            android:indeterminateTint="@color/white"
+            android:visibility="visible"
+            app:layout_constraintBottom_toBottomOf="@+id/activityGame_overlay_posterFrame_frameLayout"
+            app:layout_constraintEnd_toStartOf="@+id/activityGame_overlay_menubg_frameLayout"
+            app:layout_constraintStart_toStartOf="@+id/activityGame_overlay_posterFrame_frameLayout"
+            app:layout_constraintTop_toTopOf="@+id/activityGame_overlay_posterFrame_frameLayout" />
 
         <ProgressBar
             android:id="@+id/activityGame_status_progressBar"
@@ -50,6 +249,7 @@
             android:layout_marginBottom="20dp"
             android:elevation="40dp"
             android:indeterminateTint="@color/white"
+            android:visibility="visible"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 

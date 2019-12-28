@@ -9,7 +9,9 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -27,6 +29,7 @@ import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 import com.limelight.computers.ComputerManagerListener;
 import com.limelight.computers.ComputerManagerService;
 import com.limelight.grid.assets.CachedAppAssetLoader;
+import com.limelight.grid.assets.CachedAppAssetLoader.BitmapLoadListener;
 import com.limelight.grid.assets.DiskAssetLoader;
 import com.limelight.grid.assets.MemoryAssetLoader;
 import com.limelight.grid.assets.NetworkAssetLoader;
@@ -71,6 +74,8 @@ public class ShortcutTrampoline extends Activity {
     private static final int LARGE_WIDTH_DP = 150;
 
     private static final long LOADING_DELAY = 7_500L;
+
+    private Bitmap posterBitmap;
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         public void onServiceConnected(ComponentName className, IBinder binder) {

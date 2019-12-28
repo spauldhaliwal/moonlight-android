@@ -17,6 +17,7 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.graphics.BitmapFactory;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.hardware.input.InputManager;
@@ -39,13 +40,19 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.View.OnGenericMotionListener;
 import android.view.View.OnSystemUiVisibilityChangeListener;
 import android.view.View.OnTouchListener;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.LinearInterpolator;
+import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -53,6 +60,7 @@ import androidx.constraintlayout.widget.ConstraintLayout;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 import com.limelight.binding.PlatformBinding;
 import com.limelight.binding.input.ControllerHandler;
+import com.limelight.binding.input.ControllerHandler.MenuNavigationListener;
 import com.limelight.binding.input.ControllerHandler.MenuRequestedListener;
 import com.limelight.binding.input.KeyboardTranslator;
 import com.limelight.binding.input.TouchContext;
@@ -65,6 +73,11 @@ import com.limelight.binding.video.CrashListener;
 import com.limelight.binding.video.MediaCodecDecoderRenderer;
 import com.limelight.binding.video.MediaCodecHelper;
 import com.limelight.binding.video.PerfOverlayListener;
+import com.limelight.computers.ComputerManagerService;
+import com.limelight.grid.assets.CachedAppAssetLoader;
+import com.limelight.grid.assets.DiskAssetLoader;
+import com.limelight.grid.assets.MemoryAssetLoader;
+import com.limelight.grid.assets.NetworkAssetLoader;
 import com.limelight.nvstream.NvConnection;
 import com.limelight.nvstream.NvConnectionListener;
 import com.limelight.nvstream.StreamConfiguration;
@@ -79,6 +92,8 @@ import com.limelight.ui.GameGestures;
 import com.limelight.ui.StreamView;
 import com.limelight.utils.Dialog;
 import com.limelight.utils.NetHelper;
+import com.limelight.utils.ServerHelper;
+import com.limelight.utils.ServerHelper.QuitAppListener;
 import com.limelight.utils.ShortcutHelper;
 import com.limelight.utils.SpinnerDialog;
 import com.limelight.utils.UiHelper;
@@ -92,7 +107,17 @@ import java.util.Locale;
 public class Game extends Activity implements SurfaceHolder.Callback,
         OnGenericMotionListener, OnTouchListener, NvConnectionListener, EvdevListener,
         OnSystemUiVisibilityChangeListener, GameGestures, StreamView.InputCallbacks,
-        PerfOverlayListener, MenuRequestedListener {
+        PerfOverlayListener, MenuRequestedListener, MenuNavigationListener, QuitAppListener {
+
+    private int appId;
+
+    private FrameLayout blackoutView;
+
+    private FrameLayout posterFrame;
+
+    private String uniqueId;
+
+    private String uuidString;
 
     private int lastMouseX = Integer.MIN_VALUE;
 
@@ -183,6 +208,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     public static final String EXTRA_HOST = "Host";
 
+    public static final String EXTRA_APP = "App";
+
     public static final String EXTRA_APP_NAME = "AppName";
 
     public static final String EXTRA_APP_ID = "AppId";
@@ -193,13 +220,78 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     public static final String EXTRA_PC_NAME = "PcName";
 
+    public static final String EXTRA_POSTER = "Poster";
+
+    public static final String EXTRA_COMPUTER = "computer";
+
     public static final String EXTRA_APP_HDR = "HDR";
 
     public static final String EXTRA_SERVER_CERT = "ServerCert";
 
+    // Overlay
+
+    private static final int ART_WIDTH_PX = 300;
+
+    private static final int LARGE_WIDTH_DP = 150;
+
     ConstraintLayout overlayLayout;
 
+    private CachedAppAssetLoader loader;
+
+    private ComputerManagerService.ComputerManagerBinder managerBinder;
+
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
+        public void onServiceConnected(ComponentName className, IBinder binder) {
+            Log.d("GameActivity", "serviceConnection started");
+            final ComputerManagerService.ComputerManagerBinder localBinder =
+                    ((ComputerManagerService.ComputerManagerBinder) binder);
+
+            // Wait in a separate thread to avoid stalling the UI
+            new Thread() {
+                @Override
+                public void run() {
+                    // Wait for the binder to be ready
+                    localBinder.waitForReady();
+
+                    // Now make the binder visible
+                    Log.d("GameActivity", "serviceConnection managerBinder created");
+                    managerBinder = localBinder;
+                }
+            };
+
+
+        }
+
+        @Override
+        public void onServiceDisconnected(final ComponentName name) {
+            Log.d("GameActivity", "onServiceDisconnected");
+            managerBinder = null;
+        }
+    };
+
+    private ComputerDetails computer;
+
+    private NvApp app;
+
     ProgressBar overlayStatusSpinner;
+
+    private LinearLayout optionsBtn;
+
+    private LinearLayout quitGameBtn;
+
+    private LinearLayout resumeBtn;
+
+    private LinearLayout toggleMouseBtn;
+
+    private ImageView overlayPoster;
+
+    private ProgressBar posterProgress;
+
+    private FrameLayout overlayGradient;
+
+    private FrameLayout osdMenuContainer;
+
+    private LinearLayout osdMenu;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -237,10 +329,14 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         // Change volume button behavior
         setVolumeControlStream(AudioManager.STREAM_MUSIC);
 
+        bindService();
+
         // Inflate the content
         setContentView(R.layout.activity_game);
 
         overlayStatusSpinner = findViewById(R.id.activityGame_status_progressBar);
+        overlayStatusSpinner.setVisibility(View.VISIBLE);
+
         overlayLayout = findViewById(R.id.activityGame_overlay_layout);
 
         // Start the spinner
@@ -283,14 +379,17 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
 
         // Warn the user if they're on a metered connection
-        ConnectivityManager connMgr = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        ConnectivityManager connMgr = (ConnectivityManager) getSystemService(
+                Context.CONNECTIVITY_SERVICE);
         if (connMgr.isActiveNetworkMetered()) {
             displayTransientMessage(getResources().getString(R.string.conn_metered));
         }
 
         // Make sure Wi-Fi is fully powered up
-        WifiManager wifiMgr = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-        highPerfWifiLock = wifiMgr.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Moonlight High Perf Lock");
+        WifiManager wifiMgr = (WifiManager) getApplicationContext()
+                .getSystemService(Context.WIFI_SERVICE);
+        highPerfWifiLock = wifiMgr
+                .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Moonlight High Perf Lock");
         highPerfWifiLock.setReferenceCounted(false);
         highPerfWifiLock.acquire();
 
@@ -303,12 +402,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         String host = Game.this.getIntent().getStringExtra(EXTRA_HOST);
         String appName = Game.this.getIntent().getStringExtra(EXTRA_APP_NAME);
-        int appId = Game.this.getIntent().getIntExtra(EXTRA_APP_ID, StreamConfiguration.INVALID_APP_ID);
-        String uniqueId = Game.this.getIntent().getStringExtra(EXTRA_UNIQUEID);
+        appId = Game.this.getIntent().getIntExtra(EXTRA_APP_ID, StreamConfiguration.INVALID_APP_ID);
+        uniqueId = Game.this.getIntent().getStringExtra(EXTRA_UNIQUEID);
+        uuidString = Game.this.getIntent().getStringExtra(EXTRA_PC_UUID);
         String uuid = Game.this.getIntent().getStringExtra(EXTRA_PC_UUID);
         String pcName = Game.this.getIntent().getStringExtra(EXTRA_PC_NAME);
         boolean willStreamHdr = Game.this.getIntent().getBooleanExtra(EXTRA_APP_HDR, false);
         byte[] derCertData = Game.this.getIntent().getByteArrayExtra(EXTRA_SERVER_CERT);
+        computer = (ComputerDetails) Game.this.getIntent().getSerializableExtra(EXTRA_COMPUTER);
+        app = (NvApp) Game.this.getIntent().getSerializableExtra(EXTRA_APP);
 
         X509Certificate serverCert = null;
         try {
@@ -326,7 +428,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
 
         // Report this shortcut being used
-        ComputerDetails computer = new ComputerDetails();
+//        final ComputerDetails computer = new ComputerDetails();
         computer.name = pcName;
         computer.uuid = uuid;
         shortcutHelper = new ShortcutHelper(this);
@@ -393,7 +495,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                         // let's tell the user something when they open the app again
 
                         // We must use commit because the app will crash when we return from this function
-                        tombstonePrefs.edit().putInt("CrashCount", tombstonePrefs.getInt("CrashCount", 0) + 1)
+                        tombstonePrefs.edit()
+                                .putInt("CrashCount", tombstonePrefs.getInt("CrashCount", 0) + 1)
                                 .commit();
                         reportedCrash = true;
                     }
@@ -411,8 +514,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         }
 
         // Display a message to the user if H.265 was forced on but we still didn't find a decoder
-        if (prefConfig.videoFormat == PreferenceConfiguration.FORCE_H265_ON && !decoderRenderer.isHevcSupported()) {
-            Toast.makeText(this, "No H.265 decoder found.\nFalling back to H.264.", Toast.LENGTH_LONG).show();
+        if (prefConfig.videoFormat == PreferenceConfiguration.FORCE_H265_ON && !decoderRenderer
+                .isHevcSupported()) {
+            Toast.makeText(this, "No H.265 decoder found.\nFalling back to H.264.", Toast.LENGTH_LONG)
+                    .show();
         }
 
         int gamepadMask = ControllerHandler.getAttachedControllerMask(this);
@@ -508,10 +613,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 .build();
 
         // Initialize the connection
-        conn = new NvConnection(host, uniqueId, config, PlatformBinding.getCryptoProvider(this), serverCert);
+        conn = new NvConnection(host, uniqueId, config, PlatformBinding.getCryptoProvider(this),
+                serverCert);
         controllerHandler = new ControllerHandler(this, conn, this, prefConfig);
 
         controllerHandler.addMenuRequestedListener(this);
+        controllerHandler.addMenuNavigationListener(this);
 
         InputManager inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
         inputManager.registerInputDeviceListener(controllerHandler, null);
@@ -557,8 +664,60 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             return;
         }
 
+        osdMenu = findViewById(R.id.activityGame_overlay_menuLayout_linearLayout);
+        osdMenuContainer = findViewById(R.id.activityGame_overlay_menubg_frameLayout);
+        resumeBtn = findViewById(R.id.activityGame_overlay_menuLayout_resumeMenuItem);
+        toggleMouseBtn = findViewById(R.id.activityGame_overlay_menuLayout_toggleMouseMenuItem);
+        optionsBtn = findViewById(R.id.activityGame_overlay_menuLayout_optionsMenuItem);
+        quitGameBtn = findViewById(R.id.activityGame_overlay_menuLayout_quitGameMenuItem);
+
+        overlayPoster = findViewById(R.id.activityGame_overlay_poster_imageView);
+        posterFrame = findViewById(R.id.activityGame_overlay_posterFrame_frameLayout);
+        posterProgress = findViewById(R.id.activityGame_poster_progress);
+        overlayGradient = findViewById(R.id.activityGame_overlay_bgGradient_frameLayout);
+
+        blackoutView = findViewById(R.id.blackoutFrame_frameLayout);
+
+        posterFrame.setClipToOutline(true);
+
+        resumeBtn.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(final View v) {
+                toggleStreamingOsd();
+            }
+        });
+
+        toggleMouseBtn.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(final View v) {
+                Toast.makeText(v.getContext(), "toggle mouse button clicked", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        optionsBtn.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(final View v) {
+                Toast.makeText(v.getContext(), "option  button clicked", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        ServerHelper.addQuitAppListener(this);
+        quitGameBtn.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(final View v) {
+                quitGame();
+            }
+        });
+
+        setupAssetLoader(uuidString, this.computer);
         // The connection will be started when the surface gets created
         streamView.getHolder().addCallback(this);
+
+    }
+
+    private void bindService() {
+        bindService(new Intent(this, ComputerManagerService.class), serviceConnection,
+                Service.BIND_AUTO_CREATE);
     }
 
     @Override
@@ -865,6 +1024,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         SpinnerDialog.closeDialogs(this);
         Dialog.closeDialogs();
 
+        if (managerBinder != null) {
+            managerBinder.stopPolling();
+            unbindService(serviceConnection);
+            managerBinder = null;
+        }
+
         mSession.release();
         mSession = null;
 
@@ -882,13 +1047,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             int averageDecoderLat = decoderRenderer.getAverageDecoderLatency();
             String message = null;
             if (averageEndToEndLat > 0) {
-                message = getResources().getString(R.string.conn_client_latency) + " " + averageEndToEndLat + " ms";
+                message = getResources().getString(R.string.conn_client_latency) + " "
+                        + averageEndToEndLat + " ms";
                 if (averageDecoderLat > 0) {
                     message += " (" + getResources().getString(R.string.conn_client_latency_hw) + " "
                             + averageDecoderLat + " ms)";
                 }
             } else if (averageDecoderLat > 0) {
-                message = getResources().getString(R.string.conn_hardware_latency) + " " + averageDecoderLat + " ms";
+                message = getResources().getString(R.string.conn_hardware_latency) + " "
+                        + averageDecoderLat + " ms";
             }
 
             // Add the video codec to the post-stream toast
@@ -914,7 +1081,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                         .apply();
             }
         }
-
         finish();
     }
 
@@ -1036,32 +1202,32 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             handled = controllerHandler.handleButtonDown(event);
         }
 
-        if (!handled) {
-            // Try the keyboard handler
-            short translated = KeyboardTranslator.translate(event.getKeyCode());
-            if (translated == 0) {
-                return false;
-            }
+//        if (!handled) {
+//            // Try the keyboard handler
+//            short translated = KeyboardTranslator.translate(event.getKeyCode());
+//            if (translated == 0) {
+//                return false;
+//            }
+//
+//            // Let this method take duplicate key down events
+//            if (handleSpecialKeys(event.getKeyCode(), true)) {
+//                return true;
+//            }
+//
+//            // Pass through keyboard input if we're not grabbing
+//            if (!grabbedInput) {
+//                return false;
+//            }
+//
+//            byte modifiers = getModifierState(event);
+//            if (KeyboardTranslator.needsShift(event.getKeyCode())) {
+//                modifiers |= KeyboardPacket.MODIFIER_SHIFT;
+//                conn.sendKeyboardInput((short) 0x8010, KeyboardPacket.KEY_DOWN, modifiers);
+//            }
+//            conn.sendKeyboardInput(translated, KeyboardPacket.KEY_DOWN, modifiers);
+//        }
 
-            // Let this method take duplicate key down events
-            if (handleSpecialKeys(event.getKeyCode(), true)) {
-                return true;
-            }
-
-            // Pass through keyboard input if we're not grabbing
-            if (!grabbedInput) {
-                return false;
-            }
-
-            byte modifiers = getModifierState(event);
-            if (KeyboardTranslator.needsShift(event.getKeyCode())) {
-                modifiers |= KeyboardPacket.MODIFIER_SHIFT;
-                conn.sendKeyboardInput((short) 0x8010, KeyboardPacket.KEY_DOWN, modifiers);
-            }
-            conn.sendKeyboardInput(translated, KeyboardPacket.KEY_DOWN, modifiers);
-        }
-
-        return true;
+        return handled;
     }
 
     @Override
@@ -1133,8 +1299,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     @Override
     public void showKeyboard() {
         LimeLog.info("Showing keyboard overlay");
-        InputMethodManager inputManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        inputManager.toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_IMPLICIT_ONLY);
+        InputMethodManager inputManager = (InputMethodManager) getSystemService(
+                Context.INPUT_METHOD_SERVICE);
+        inputManager
+                .toggleSoftInput(InputMethodManager.SHOW_FORCED, InputMethodManager.HIDE_IMPLICIT_ONLY);
     }
 
     // Returns true if the event was consumed
@@ -1241,7 +1409,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             // This case is for touch-based input devices
             else {
                 if (virtualController != null &&
-                        virtualController.getControllerMode() == VirtualController.ControllerMode.Configuration) {
+                        virtualController.getControllerMode()
+                                == VirtualController.ControllerMode.Configuration) {
                     // Ignore presses when the virtual controller is in configuration mode
                     return true;
                 }
@@ -1280,7 +1449,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     case MotionEvent.ACTION_UP:
                         if (event.getPointerCount() == 1) {
                             // All fingers up
-                            if (SystemClock.uptimeMillis() - threeFingerDownTime < THREE_FINGER_TAP_THRESHOLD) {
+                            if (SystemClock.uptimeMillis() - threeFingerDownTime
+                                    < THREE_FINGER_TAP_THRESHOLD) {
                                 // This is a 3 finger tap to bring up the keyboard
                                 showKeyboard();
                                 return true;
@@ -1301,8 +1471,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                             for (TouchContext aTouchContextMap : touchContextMap) {
                                 if (aTouchContextMap.getActionIndex() < event.getPointerCount()) {
                                     aTouchContextMap.touchMoveEvent(
-                                            (int) event.getHistoricalX(aTouchContextMap.getActionIndex(), i),
-                                            (int) event.getHistoricalY(aTouchContextMap.getActionIndex(), i));
+                                            (int) event
+                                                    .getHistoricalX(aTouchContextMap.getActionIndex(), i),
+                                            (int) event.getHistoricalY(aTouchContextMap.getActionIndex(),
+                                                    i));
                                 }
                             }
                         }
@@ -1357,8 +1529,10 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
             // Scale the deltas if the device resolution is different
             // than the stream resolution
-            deltaX = (int) Math.round((double) deltaX * (REFERENCE_HORIZ_RES / (double) streamView.getWidth()));
-            deltaY = (int) Math.round((double) deltaY * (REFERENCE_VERT_RES / (double) streamView.getHeight()));
+            deltaX = (int) Math
+                    .round((double) deltaX * (REFERENCE_HORIZ_RES / (double) streamView.getWidth()));
+            deltaY = (int) Math
+                    .round((double) deltaY * (REFERENCE_VERT_RES / (double) streamView.getHeight()));
 
             conn.sendMouseMove((short) deltaX, (short) deltaY);
         }
@@ -1462,7 +1636,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     // Display the error dialog if it was an unexpected termination.
                     // Otherwise, just finish the activity immediately.
                     if (errorCode != 0) {
-                        Dialog.displayDialog(Game.this, getResources().getString(R.string.conn_terminated_title),
+                        Dialog.displayDialog(Game.this,
+                                getResources().getString(R.string.conn_terminated_title),
                                 getResources().getString(R.string.conn_terminated_msg), true);
                     } else {
                         finish();
@@ -1470,6 +1645,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 }
             }
         });
+    }
+
+    @Override
+    public void onBackPressed() {
+        toggleStreamingOsd();
     }
 
     @Override
@@ -1483,9 +1663,11 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
                 if (connectionStatus == MoonBridge.CONN_STATUS_POOR) {
                     if (prefConfig.bitrate > 5000) {
-                        notificationOverlayView.setText(getResources().getString(R.string.slow_connection_msg));
+                        notificationOverlayView
+                                .setText(getResources().getString(R.string.slow_connection_msg));
                     } else {
-                        notificationOverlayView.setText(getResources().getString(R.string.poor_connection_msg));
+                        notificationOverlayView
+                                .setText(getResources().getString(R.string.poor_connection_msg));
                     }
 
                     requestedNotificationOverlayVisibility = View.VISIBLE;
@@ -1564,7 +1746,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     @Override
     public void rumble(int controllerNumber, int lowFreqMotor, int highFreqMotor) {
-        LimeLog.info(String.format((Locale) null, "Rumble on gamepad %d: %04x %04x", controllerNumber, lowFreqMotor,
+        LimeLog.info(String.format((Locale) null, "Rumble on gamepad %d: %04x %04x", controllerNumber,
+                lowFreqMotor,
                 highFreqMotor));
 
         controllerHandler.handleRumble(controllerNumber, lowFreqMotor, highFreqMotor);
@@ -1712,6 +1895,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                     public void onAnimationEnd(final Animator animation) {
                         overlayLayout.setVisibility(View.GONE);
                         overlayStatusSpinner.setVisibility(View.GONE);
+                        overlayLayout.setAlpha(1f);
                     }
 
                     @Override
@@ -1727,9 +1911,195 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 .start();
     }
 
-    @Override
-    public void onMenuRequested() {
-        Toast.makeText(this, "menu request sent to Game activity", Toast.LENGTH_LONG).show();
+    private void setupAssetLoader(String uniqueId, ComputerDetails computer) {
+
+        Log.d("Game", "asset load init");
+        int dpi = this.getResources().getDisplayMetrics().densityDpi;
+        int dp;
+
+        dp = LARGE_WIDTH_DP;
+
+        double scalingDivisor = ART_WIDTH_PX / (dp * (dpi / 160.0));
+        if (scalingDivisor < 1.0) {
+            // We don't want to make them bigger before draw-time
+            scalingDivisor = 1.0;
+        }
+
+        this.loader = new CachedAppAssetLoader(computer, scalingDivisor,
+                new NetworkAssetLoader(this, uniqueId),
+                new MemoryAssetLoader(),
+                new DiskAssetLoader(this),
+                BitmapFactory.decodeResource(this.getResources(), R.drawable.no_app_image));
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                loader.populateImageView(app, overlayPoster, posterProgress);
+            }
+        });
     }
 
+    @Override
+    public void onMenuRequested() {
+        toggleStreamingOsd();
+    }
+
+    private void toggleStreamingOsd() {
+        if (overlayLayout.getVisibility() != View.VISIBLE) {
+            controllerHandler.streamingOsdIsVisible = true;
+            resumeBtn.requestFocus();
+            showStreamingOsd();
+        } else {
+            controllerHandler.streamingOsdIsVisible = false;
+            hideStreamingOsd();
+        }
+    }
+
+    private void showStreamingOsd() {
+        overlayLayout.setAlpha(0f);
+        overlayLayout.setTranslationY(0f);
+
+        posterFrame.setTranslationY(300);
+
+        osdMenuContainer.setAlpha(0f);
+        osdMenuContainer.setTranslationX(-200);
+        osdMenuContainer.setTranslationY(300);
+
+        overlayLayout.animate()
+                .alpha(1f)
+                .setInterpolator(new FastOutSlowInInterpolator())
+                .setDuration(500)
+                .setListener(new AnimatorListener() {
+                    @Override
+                    public void onAnimationStart(final Animator animation) {
+                        overlayGradient.setVisibility(View.VISIBLE);
+                        overlayPoster.setVisibility(View.VISIBLE);
+                        posterFrame.setVisibility(View.VISIBLE);
+                        overlayLayout.setVisibility(View.VISIBLE);
+                        osdMenuContainer.setVisibility(View.VISIBLE);
+                    }
+
+                    @Override
+                    public void onAnimationEnd(final Animator animation) {
+
+                    }
+
+                    @Override
+                    public void onAnimationCancel(final Animator animation) {
+
+                    }
+
+                    @Override
+                    public void onAnimationRepeat(final Animator animation) {
+
+                    }
+                }).start();
+
+        posterFrame.animate()
+                .translationY(0f)
+                .alpha(1f)
+                .setInterpolator(new FastOutSlowInInterpolator())
+                .setDuration(300)
+                .start();
+
+        osdMenuContainer.animate()
+                .translationY(0f)
+                .setStartDelay(0)
+                .setInterpolator(new FastOutSlowInInterpolator())
+                .setDuration(300)
+                .start();
+
+        osdMenuContainer.animate()
+                .alpha(1f)
+                .translationX(0f)
+                .setInterpolator(new FastOutSlowInInterpolator())
+                .setStartDelay(100)
+                .setDuration(300)
+                .start();
+    }
+
+    private void hideStreamingOsd() {
+        overlayLayout.setAlpha(1f);
+        overlayLayout.animate()
+                .alpha(0f)
+                .translationY(200)
+                .setInterpolator(new FastOutSlowInInterpolator())
+                .setDuration(250)
+                .setListener(new AnimatorListener() {
+                    @Override
+                    public void onAnimationStart(final Animator animation) {
+
+                    }
+
+                    @Override
+                    public void onAnimationEnd(final Animator animation) {
+                        overlayLayout.setVisibility(View.GONE);
+
+                    }
+
+                    @Override
+                    public void onAnimationCancel(final Animator animation) {
+
+                    }
+
+                    @Override
+                    public void onAnimationRepeat(final Animator animation) {
+
+                    }
+                }).start();
+    }
+
+    @Override
+    public void onMenuKeyPassedThrough(final int keycode) {
+        BaseInputConnection inputConnection = new BaseInputConnection(osdMenu, true);
+        switch (keycode) {
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+            case KeyEvent.KEYCODE_DPAD_UP:
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                inputConnection.sendKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, keycode));
+                break;
+        }
+    }
+
+    private void quitGame() {
+        ServerHelper.doQuit(Game.this,
+                computer,
+                app,
+                uniqueId,
+                null);
+    }
+
+    @Override
+    public void onQuitApp(final Boolean successfullyStarted) {
+        toggleStreamingOsd();
+        UiHelper.showView(blackoutView);
+
+        streamView.animate()
+                .scaleX(1.2f)
+                .scaleY(1.2f)
+                .setDuration(500L)
+                .setInterpolator(new FastOutSlowInInterpolator())
+                .setListener(new AnimatorListener() {
+                    @Override
+                    public void onAnimationStart(final Animator animation) {
+                    }
+
+                    @Override
+                    public void onAnimationEnd(final Animator animation) {
+                        streamView.setVisibility(View.INVISIBLE);
+                        finish();
+                    }
+
+                    @Override
+                    public void onAnimationCancel(final Animator animation) {
+
+                    }
+
+                    @Override
+                    public void onAnimationRepeat(final Animator animation) {
+
+                    }
+                }).start();
+    }
 }

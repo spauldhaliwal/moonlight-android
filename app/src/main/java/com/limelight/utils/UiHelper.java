@@ -208,21 +208,47 @@ public class UiHelper {
                 .show();
     }
 
-    private static void showView(final View view) {
+    public static void showView(final View view) {
         view.setAlpha(0f);
         view.animate()
                 .alpha(1)
-                .setDuration(1_000L)
+                .setDuration(500)
                 .setInterpolator(new FastOutSlowInInterpolator())
                 .setListener(new AnimatorListener() {
                     @Override
                     public void onAnimationStart(final Animator animation) {
-
+                        view.setVisibility(View.VISIBLE);
                     }
 
                     @Override
                     public void onAnimationEnd(final Animator animation) {
-                        view.setVisibility(View.VISIBLE);
+                    }
+
+                    @Override
+                    public void onAnimationCancel(final Animator animation) {
+
+                    }
+
+                    @Override
+                    public void onAnimationRepeat(final Animator animation) {
+
+                    }
+                }).start();
+    }
+
+    public static void hideView(final View view) {
+        view.animate()
+                .alpha(0f)
+                .setDuration(500L)
+                .setInterpolator(new FastOutSlowInInterpolator())
+                .setListener(new AnimatorListener() {
+                    @Override
+                    public void onAnimationStart(final Animator animation) {
+                    }
+
+                    @Override
+                    public void onAnimationEnd(final Animator animation) {
+                        view.setVisibility(View.GONE);
                     }
 
                     @Override
