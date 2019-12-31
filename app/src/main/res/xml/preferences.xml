@@ -176,5 +176,10 @@
             android:title="@string/title_enable_perf_overlay"
             android:summary="@string/summary_enable_perf_overlay"
             android:defaultValue="false"/>
+        <CheckBoxPreference
+            android:key="checkbox_enable_shield_only_import"
+            android:title="@string/title_only_import_shield_games"
+            android:summary="@string/summary_only_import_shield_games"
+            android:defaultValue="false"/>
     </PreferenceCategory>
 </PreferenceScreen>

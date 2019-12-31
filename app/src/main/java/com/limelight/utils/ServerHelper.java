@@ -2,29 +2,26 @@ package com.limelight.utils;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.util.Log;
+import android.view.View;
 import android.widget.Toast;
-
 import com.limelight.AppView;
 import com.limelight.Game;
+import com.limelight.GameLauncher;
 import com.limelight.R;
-import com.limelight.ShortcutTrampoline;
 import com.limelight.binding.PlatformBinding;
 import com.limelight.computers.ComputerManagerService;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.GfeHttpResponseException;
 import com.limelight.nvstream.http.NvApp;
 import com.limelight.nvstream.http.NvHTTP;
-
-import java.util.ArrayList;
-import java.util.List;
-import org.xmlpull.v1.XmlPullParserException;
-
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.security.cert.CertificateEncodingException;
+import java.util.ArrayList;
+import java.util.List;
+import org.xmlpull.v1.XmlPullParserException;
 
 public class ServerHelper {
 
@@ -43,18 +40,41 @@ public class ServerHelper {
     }
 
     public static Intent createAppShortcutIntent(Activity parent, ComputerDetails computer, NvApp app) {
-        Intent i = new Intent(parent, ShortcutTrampoline.class);
+        Intent i = new Intent(parent, GameLauncher.class);
         i.putExtra(AppView.NAME_EXTRA, computer.name);
         i.putExtra(AppView.UUID_EXTRA, computer.uuid);
         i.putExtra(Game.EXTRA_APP_NAME, app.getAppName());
-        i.putExtra(Game.EXTRA_APP_ID, ""+app.getAppId());
+        i.putExtra(Game.EXTRA_APP_ID, "" + app.getAppId());
         i.putExtra(Game.EXTRA_APP_HDR, app.isHdrSupported());
         i.setAction(Intent.ACTION_DEFAULT);
         return i;
     }
 
     public static Intent createStartIntent(Activity parent, NvApp app, ComputerDetails computer,
-                                           ComputerManagerService.ComputerManagerBinder managerBinder) {
+            ComputerManagerService.ComputerManagerBinder managerBinder) {
+        Intent intent = new Intent(parent, Game.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        intent.putExtra(Game.EXTRA_HOST, getCurrentAddressFromComputer(computer));
+        intent.putExtra(Game.EXTRA_APP, app);
+        intent.putExtra(Game.EXTRA_APP_NAME, app.getAppName());
+        intent.putExtra(Game.EXTRA_APP_ID, app.getAppId());
+        intent.putExtra(Game.EXTRA_APP_HDR, app.isHdrSupported());
+        intent.putExtra(Game.EXTRA_UNIQUEID, managerBinder.getUniqueId());
+        intent.putExtra(Game.EXTRA_COMPUTER, computer);
+        intent.putExtra(Game.EXTRA_PC_UUID, computer.uuid);
+        intent.putExtra(Game.EXTRA_PC_NAME, computer.name);
+        try {
+            if (computer.serverCert != null) {
+                intent.putExtra(Game.EXTRA_SERVER_CERT, computer.serverCert.getEncoded());
+            }
+        } catch (CertificateEncodingException e) {
+            e.printStackTrace();
+        }
+        return intent;
+    }
+
+    public static Intent createSharedElementStartIntent(Activity parent, NvApp app, ComputerDetails computer,
+            ComputerManagerService.ComputerManagerBinder managerBinder, View sharedElement) {
         Intent intent = new Intent(parent, Game.class);
         intent.putExtra(Game.EXTRA_HOST, getCurrentAddressFromComputer(computer));
         intent.putExtra(Game.EXTRA_APP, app);
@@ -76,7 +96,7 @@ public class ServerHelper {
     }
 
     public static void doStart(Activity parent, NvApp app, ComputerDetails computer,
-                               ComputerManagerService.ComputerManagerBinder managerBinder) {
+            ComputerManagerService.ComputerManagerBinder managerBinder) {
         /**
          * Removed below OFFLINE check as Shortcut Trampoline (started by createAppShortcutIntent) already checks.
          */
@@ -89,11 +109,13 @@ public class ServerHelper {
     }
 
     public static void doQuit(final Activity parent,
-                              final ComputerDetails computer,
-                              final NvApp app,
-                              final ComputerManagerService.ComputerManagerBinder managerBinder,
-                              final Runnable onComplete) {
-        Toast.makeText(parent, parent.getResources().getString(R.string.applist_quit_app) + " " + app.getAppName() + "...", Toast.LENGTH_SHORT).show();
+            final ComputerDetails computer,
+            final NvApp app,
+            final ComputerManagerService.ComputerManagerBinder managerBinder,
+            final Runnable onComplete) {
+        Toast.makeText(parent,
+                parent.getResources().getString(R.string.applist_quit_app) + " " + app.getAppName() + "...",
+                Toast.LENGTH_SHORT).show();
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -103,19 +125,21 @@ public class ServerHelper {
                     Log.d("ServerHelper", "managerBinder uuid: " + managerBinder.getUniqueId());
                     Log.d("ServerHelper", "server address: " + ServerHelper.getCurrentAddressFromComputer(computer));
                     httpConn = new NvHTTP(ServerHelper.getCurrentAddressFromComputer(computer),
-                            managerBinder.getUniqueId(), computer.serverCert, PlatformBinding.getCryptoProvider(parent));
+                            managerBinder.getUniqueId(), computer.serverCert,
+                            PlatformBinding.getCryptoProvider(parent));
                     if (httpConn.quitApp()) {
-                        message = parent.getResources().getString(R.string.applist_quit_success) + " " + app.getAppName();
+                        message = parent.getResources().getString(R.string.applist_quit_success) + " " + app
+                                .getAppName();
                     } else {
-                        message = parent.getResources().getString(R.string.applist_quit_fail) + " " + app.getAppName();
+                        message = parent.getResources().getString(R.string.applist_quit_fail) + " " + app
+                                .getAppName();
                     }
                 } catch (GfeHttpResponseException e) {
                     if (e.getErrorCode() == 599) {
                         message = "This session wasn't started by this device," +
                                 " so it cannot be quit. End streaming on the original " +
-                                "device or the PC itself. (Error code: "+e.getErrorCode()+")";
-                    }
-                    else {
+                                "device or the PC itself. (Error code: " + e.getErrorCode() + ")";
+                    } else {
                         message = e.getMessage();
                     }
                 } catch (UnknownHostException e) {
@@ -148,7 +172,7 @@ public class ServerHelper {
             final String managerBinderUuid,
             final Runnable onComplete) {
 
-        for (QuitAppListener listener: quitAppListeners) {
+        for (QuitAppListener listener : quitAppListeners) {
             listener.onQuitApp(true);
         }
         new Thread(new Runnable() {
@@ -164,15 +188,15 @@ public class ServerHelper {
                     if (httpConn.quitApp()) {
                         message = "";
                     } else {
-                        message = parent.getResources().getString(R.string.applist_quit_fail) + " " + app.getAppName();
+                        message = parent.getResources().getString(R.string.applist_quit_fail) + " " + app
+                                .getAppName();
                     }
                 } catch (GfeHttpResponseException e) {
                     if (e.getErrorCode() == 599) {
                         message = "This session wasn't started by this device," +
                                 " so it cannot be quit. End streaming on the original " +
-                                "device or the PC itself. (Error code: "+e.getErrorCode()+")";
-                    }
-                    else {
+                                "device or the PC itself. (Error code: " + e.getErrorCode() + ")";
+                    } else {
                         message = e.getMessage();
                     }
                 } catch (UnknownHostException e) {
@@ -206,6 +230,7 @@ public class ServerHelper {
     }
 
     public interface QuitAppListener {
+
         public void onQuitApp(Boolean success);
     }
 }

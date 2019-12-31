@@ -1,6 +1,7 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-kapt'
 
 android {
     compileSdkVersion 29
@@ -11,6 +12,15 @@ android {
 
         versionName "8.7"
         versionCode = 206
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_1_8.toString()
     }
 
     flavorDimensions "root"
@@ -136,6 +146,35 @@ dependencies {
 
     implementation 'androidx.tvprovider:tvprovider:1.0.0'
 
+    implementation 'androidx.appcompat:appcompat:1.0.2'
+
+    //Dependency Injection
+    implementation "com.google.dagger:dagger:$daggerVersion"
+    implementation "com.google.dagger:dagger-android-support:$daggerVersion"
+    annotationProcessor "com.google.dagger:dagger-compiler:$daggerVersion"
+    annotationProcessor "com.google.dagger:dagger-android-processor:$daggerVersion"
+    kapt "com.google.dagger:dagger-android-processor:$daggerVersion"
+    kapt "com.google.dagger:dagger-compiler:$daggerVersion"
+
+    // Gson
+    implementation 'com.google.code.gson:gson:2.8.6'
+
+    //Moshi
+    implementation "com.squareup.moshi:moshi-kotlin:$rootProject.moshi_version"
+    kapt "com.squareup.moshi:moshi-kotlin-codegen:$rootProject.moshi_version"
+
+    //Retrofit2
+    implementation "com.squareup.retrofit2:retrofit:$rootProject.retrofit2_version"
+    implementation "com.squareup.retrofit2:converter-moshi:$rootProject.retrofit2_version"
+    implementation 'com.squareup.retrofit2:converter-scalars:2.4.0'
+
+    //Okhttp3
+    implementation "com.squareup.okhttp3:okhttp:$rootProject.okhttp3_version"
+    implementation 'com.squareup.okhttp3:logging-interceptor:3.11.0'
+
+    // Coroutines
+    api "org.jetbrains.kotlinx:kotlinx-coroutines-core:$rootProject.coroutines_version"
+    api "org.jetbrains.kotlinx:kotlinx-coroutines-android:$rootProject.coroutines_version"
 }
 repositories {
     maven { url "https://jitpack.io" }

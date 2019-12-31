@@ -1506,6 +1506,7 @@ public class ControllerHandler implements InputManager.InputDeviceListener, UsbD
                     context.startDownTime = SystemClock.uptimeMillis();
                 }
                 if (event.isLongPress()) {
+                    Log.d("ControllerHandler", "long press start received");
                     mouseContext = getContextForEvent(event);
                     for (MenuRequestedListener listener : menuRequestedListeners) {
                         listener.onMenuRequested();

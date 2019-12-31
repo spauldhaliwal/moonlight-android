@@ -17,6 +17,7 @@ import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Point;
 import android.graphics.Rect;
@@ -89,6 +90,7 @@ import com.limelight.preferences.GlPreferences;
 import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.ui.GameGestures;
 import com.limelight.ui.StreamView;
+import com.limelight.utils.BitmapRunnable;
 import com.limelight.utils.Dialog;
 import com.limelight.utils.KeyboardUtils;
 import com.limelight.utils.KeyboardUtils.SoftKeyboardToggleListener;
@@ -103,6 +105,8 @@ import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Locale;
+import jp.wasabeef.blurry.Blurry;
+import org.jcodec.common.DictionaryCompressor.Int;
 
 
 public class Game extends Activity implements SurfaceHolder.Callback,
@@ -112,11 +116,23 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     private int appId;
 
+    private FrameLayout bgOverlay;
+
     private FrameLayout blackoutView;
+
+    private int keyboardHideCount = 1;
 
     private Boolean keyboardIsVisible;
 
+    private ImageView largePoster;
+
     private FrameLayout posterFrame;
+
+    private FrameLayout posterOverlay;
+
+    private ImageView transitionBg;
+
+    private ConstraintLayout transitionLayout;
 
     private String uniqueId;
 
@@ -274,8 +290,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
     private NvApp app;
 
-    ProgressBar overlayStatusSpinner;
-
     ConstraintLayout overlayLayout;
 
     private LinearLayout optionsBtn;
@@ -303,6 +317,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     private FrameLayout osdMenuContainer;
 
     private LinearLayout osdMenu;
+
+    public static long LOADING_DELAY = 5_000L;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -345,10 +361,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         // Inflate the content
         setContentView(R.layout.activity_game);
 
-        overlayStatusSpinner = findViewById(R.id.activityGame_status_progressBar);
-        overlayStatusSpinner.setVisibility(View.VISIBLE);
-
         overlayLayout = findViewById(R.id.activityGame_overlay_layout);
+        transitionLayout = findViewById(R.id.activityGameLoaderTransition_layout);
 
         // Start the spinner
 //        spinner = SpinnerDialog.displayDialog(this, getResources().getString(R.string.conn_establishing_title),
@@ -688,6 +702,9 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         optionsBtn = findViewById(R.id.activityGame_overlay_menuLayout_optionsMenuItem);
         quitGameBtn = findViewById(R.id.activityGame_overlay_menuLayout_quitGameMenuItem);
 
+        largePoster = findViewById(R.id.activityGameLoaderTransition_poster_imageView);
+        transitionBg = findViewById(R.id.activityGameLoaderTransition_bg_imageView);
+        bgOverlay = findViewById(R.id.activityGameLoaderTransition_bgOverlay_frameLayout);
         overlayPoster = findViewById(R.id.activityGame_overlay_poster_imageView);
         posterFrame = findViewById(R.id.activityGame_overlay_posterFrame_frameLayout);
         posterProgress = findViewById(R.id.activityGame_poster_progress);
@@ -695,6 +712,7 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
         blackoutView = findViewById(R.id.blackoutFrame_frameLayout);
 
+        largePoster.setClipToOutline(true);
         posterFrame.setClipToOutline(true);
 
         resumeBtn.setOnClickListener(new OnClickListener() {
@@ -732,19 +750,63 @@ public class Game extends Activity implements SurfaceHolder.Callback,
         // The connection will be started when the surface gets created
         streamView.getHolder().addCallback(this);
 
+        // Keyboard is "hidden" on launch, so we ignore this first instance.
+        keyboardHideCount = 1;
         KeyboardUtils.addKeyboardToggleListener(this, new SoftKeyboardToggleListener() {
             @Override
             public void onToggleSoftKeyboard(final boolean isVisible) {
                 if (isVisible) {
                     UiHelper.hideView(overlayLayout);
                 } else {
-                    UiHelper.showView(overlayLayout);
+                    if (keyboardHideCount > 1) {
+                        UiHelper.showView(overlayLayout);
+                    }
+                    keyboardHideCount++;
                     resumeBtn.requestFocus();
                 }
                 keyboardIsVisible = isVisible;
             }
         });
+    }
 
+    private void setupAssetLoader(String uniqueId, ComputerDetails computer) {
+
+        Log.d("Game", "asset load init");
+        int dpi = this.getResources().getDisplayMetrics().densityDpi;
+        int dp;
+
+        dp = LARGE_WIDTH_DP;
+
+        double scalingDivisor = ART_WIDTH_PX / (dp * (dpi / 160.0));
+        if (scalingDivisor < 1.0) {
+            // We don't want to make them bigger before draw-time
+            scalingDivisor = 1.0;
+        }
+
+        this.loader = new CachedAppAssetLoader(computer, scalingDivisor,
+                new NetworkAssetLoader(this, uniqueId),
+                new MemoryAssetLoader(),
+                new DiskAssetLoader(this),
+                BitmapFactory.decodeResource(this.getResources(), R.drawable.no_app_image));
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                loader.populateImageViewSoft(app, transitionBg, posterProgress, new BitmapRunnable() {
+                    @Override
+                    public void runOnBmp(final Bitmap bmp) {
+                        Blurry.with(transitionBg.getContext())
+                                .radius(20)
+                                .sampling(8)
+                                .async()
+                                .from(bmp)
+                                .into(transitionBg);
+                    }
+                });
+                loader.populateImageView(app, largePoster, posterProgress);
+                loader.populateImageView(app, overlayPoster, posterProgress);
+            }
+        });
     }
 
     private void bindService() {
@@ -1213,7 +1275,6 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         return handleKeyDown(event) || super.onKeyDown(keyCode, event);
     }
-
 
 
     @Override
@@ -1923,9 +1984,12 @@ public class Game extends Activity implements SurfaceHolder.Callback,
     }
 
     public void dismissOverlay() {
-        overlayLayout.animate()
+        transitionLayout.animate()
                 .alpha(0)
+                .scaleX(1.2f)
+                .scaleY(1.2f)
                 .setDuration(500L)
+                .setStartDelay(LOADING_DELAY)
                 .setInterpolator(new FastOutSlowInInterpolator())
                 .setListener(new AnimatorListener() {
                     @Override
@@ -1935,9 +1999,8 @@ public class Game extends Activity implements SurfaceHolder.Callback,
 
                     @Override
                     public void onAnimationEnd(final Animator animation) {
-                        overlayLayout.setVisibility(View.GONE);
-                        overlayStatusSpinner.setVisibility(View.GONE);
-                        overlayLayout.setAlpha(1f);
+                        transitionLayout.setVisibility(View.GONE);
+                        LOADING_DELAY = 5_000L;
                     }
 
                     @Override
@@ -1953,40 +2016,14 @@ public class Game extends Activity implements SurfaceHolder.Callback,
                 .start();
     }
 
-    private void setupAssetLoader(String uniqueId, ComputerDetails computer) {
-
-        Log.d("Game", "asset load init");
-        int dpi = this.getResources().getDisplayMetrics().densityDpi;
-        int dp;
-
-        dp = LARGE_WIDTH_DP;
-
-        double scalingDivisor = ART_WIDTH_PX / (dp * (dpi / 160.0));
-        if (scalingDivisor < 1.0) {
-            // We don't want to make them bigger before draw-time
-            scalingDivisor = 1.0;
-        }
-
-        this.loader = new CachedAppAssetLoader(computer, scalingDivisor,
-                new NetworkAssetLoader(this, uniqueId),
-                new MemoryAssetLoader(),
-                new DiskAssetLoader(this),
-                BitmapFactory.decodeResource(this.getResources(), R.drawable.no_app_image));
-
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                loader.populateImageView(app, overlayPoster, posterProgress);
-            }
-        });
-    }
-
     @Override
     public void onMenuRequested() {
+        Log.d("GameActivity", "menu requested");
         toggleStreamingOsd();
     }
 
     private void toggleStreamingOsd() {
+        Log.d("GameActivity", "toggling osd");
         if (controllerHandler.mouseEnabled) {
             toggleMouseTitle.setText("Disable mouse");
             if (mouseOnDrawable != null) {
@@ -2007,12 +2044,15 @@ public class Game extends Activity implements SurfaceHolder.Callback,
             resumeBtn.requestFocus();
             showStreamingOsd();
         } else {
+            Log.d("GameActivity", "osd is visible");
+
             controllerHandler.streamingOsdIsVisible = false;
             hideStreamingOsd();
         }
     }
 
     private void showStreamingOsd() {
+        Log.d("GameActivity", "showing osd");
         overlayLayout.setAlpha(0f);
         overlayLayout.setTranslationY(0f);
 

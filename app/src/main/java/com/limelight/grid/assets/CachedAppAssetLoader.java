@@ -1,7 +1,5 @@
 package com.limelight.grid.assets;
 
-import android.animation.Animator;
-import android.animation.Animator.AnimatorListener;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
@@ -12,16 +10,15 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
-import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
+import com.limelight.utils.BitmapRunnable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import jp.wasabeef.blurry.Blurry;
 
 public class CachedAppAssetLoader {
 
@@ -256,7 +253,7 @@ public class CachedAppAssetLoader {
                 // will use the app image placeholder bitmap, rather than an empty bitmap.
                 LoaderTask task = new LoaderTask(imageView, prgView, false);
                 AsyncDrawable asyncDrawable = new AsyncDrawable(imageView.getResources(), noAppImageBitmap, task);
-                imageView.setVisibility(View.VISIBLE);
+//                imageView.setVisibility(View.VISIBLE);
                 imageView.setImageDrawable(asyncDrawable);
                 task.executeOnExecutor(networkExecutor, tuple);
             }
@@ -283,7 +280,7 @@ public class CachedAppAssetLoader {
                 }
 
                 // Show the view
-                imageView.setVisibility(View.VISIBLE);
+//                imageView.setVisibility(View.VISIBLE);
             }
         }
     }
@@ -296,15 +293,16 @@ public class CachedAppAssetLoader {
 
         private final boolean diskOnly;
 
-        private boolean blurOnEnd;
+        private BitmapRunnable doOnEnd;
 
         private LoaderTuple tuple;
 
-        public LoaderTaskSoft(ImageView imageView, ProgressBar prgView, boolean diskOnly, boolean blurOnEnd) {
+        public LoaderTaskSoft(ImageView imageView, ProgressBar prgView, boolean diskOnly,
+                BitmapRunnable doOnEnd) {
             this.imageViewRef = new WeakReference<>(imageView);
             this.progressViewRef = new WeakReference<>(prgView);
             this.diskOnly = diskOnly;
-            this.blurOnEnd = blurOnEnd;
+            this.doOnEnd = doOnEnd;
         }
 
         @Override
@@ -357,10 +355,10 @@ public class CachedAppAssetLoader {
 
                 // Set off another loader task on the network executor. This time our AsyncDrawable
                 // will use the app image placeholder bitmap, rather than an empty bitmap.
-                LoaderTaskSoft task = new LoaderTaskSoft(imageView, prgView, false, blurOnEnd);
+                LoaderTaskSoft task = new LoaderTaskSoft(imageView, prgView, false, doOnEnd);
                 AsyncDrawableSoft asyncDrawable = new AsyncDrawableSoft(imageView.getResources(), noAppImageBitmap,
                         task);
-                imageView.setVisibility(View.VISIBLE);
+//                imageView.setVisibility(View.VISIBLE);
                 imageView.setImageDrawable(asyncDrawable);
                 task.executeOnExecutor(networkExecutor, tuple);
             }
@@ -379,30 +377,24 @@ public class CachedAppAssetLoader {
             if (getLoaderTaskSoft(imageView) == this) {
                 // Set the bitmap
                 if (bitmap != null) {
-                    if (blurOnEnd) {
-                        Log.d("CachedAppAssetLoader", "set image with blur");
-                        Blurry.with(imageView.getContext())
-                                .radius(20)
-                                .sampling(8)
-                                .async()
-                                .from(bitmap)
-                                .into(imageView);
+                    if (doOnEnd != null) {
+                        doOnEnd.runOnBmp(bitmap);
 
-                        imageView.setAlpha(0f);
-                        imageView.setScaleX(2f);
-                        imageView.setScaleY(2f);
-                        imageView.setVisibility(View.VISIBLE);
-                        imageView.animate()
-                                .alpha(1)
-                                .setDuration(500L)
-                                .setInterpolator(new FastOutSlowInInterpolator())
-                                .start();
-                        imageView.animate()
-                                .scaleX(1)
-                                .scaleY(1)
-                                .setDuration(15_000L)
-                                .setInterpolator(new FastOutSlowInInterpolator())
-                                .start();
+//                        imageView.setAlpha(0f);
+//                        imageView.setScaleX(2f);
+//                        imageView.setScaleY(2f);
+//                        imageView.setVisibility(View.VISIBLE);
+//                        imageView.animate()
+//                                .alpha(1)
+//                                .setDuration(500L)
+//                                .setInterpolator(new FastOutSlowInInterpolator())
+//                                .start();
+//                        imageView.animate()
+//                                .scaleX(1)
+//                                .scaleY(1)
+//                                .setDuration(15_000L)
+//                                .setInterpolator(new FastOutSlowInInterpolator())
+//                                .start();
                     } else {
                         Log.d("CachedAppAssetLoader", "set image without blur");
                         imageView.setImageBitmap(bitmap);
@@ -415,11 +407,10 @@ public class CachedAppAssetLoader {
                 }
 
                 // Show the view
-                imageView.setVisibility(View.VISIBLE);
+//                imageView.setVisibility(View.VISIBLE);
             }
             Log.d("CachedAppAssetLoader", "set image with blur ends");
         }
-
     }
 
     static class AsyncDrawable extends BitmapDrawable {
@@ -545,7 +536,7 @@ public class CachedAppAssetLoader {
         Bitmap bmp = memoryLoader.loadBitmapFromCache(tuple);
         if (bmp != null) {
             // Show the bitmap immediately
-            imgView.setVisibility(View.VISIBLE);
+//            imgView.setVisibility(View.VISIBLE);
             imgView.setImageBitmap(bmp);
             return true;
         }
@@ -554,7 +545,7 @@ public class CachedAppAssetLoader {
         // via AsyncDrawable to this view.
         final LoaderTask task = new LoaderTask(imgView, prgView, true);
         final AsyncDrawable asyncDrawable = new AsyncDrawable(imgView.getResources(), placeholderBitmap, task);
-        imgView.setVisibility(View.INVISIBLE);
+//        imgView.setVisibility(View.INVISIBLE);
         imgView.setImageDrawable(asyncDrawable);
 
         // Run the task on our foreground executor
@@ -562,7 +553,8 @@ public class CachedAppAssetLoader {
         return false;
     }
 
-    public boolean populateImageViewSoft(NvApp app, final ImageView imageView, ProgressBar prgView, boolean blurOnEnd) {
+    public boolean populateImageViewSoft(NvApp app, final ImageView imageView, ProgressBar prgView,
+            BitmapRunnable doOnEnd) {
         Log.d("CachedAppAssetLoader", "start loading image for blur");
         LoaderTuple tuple = new LoaderTuple(computer, app);
 
@@ -581,37 +573,37 @@ public class CachedAppAssetLoader {
         if (bmp != null) {
             // Show the bitmap immediately
             Bitmap bitmap = bmp.copy(Config.RGB_565, false);
-            Blurry.with(imageView.getContext())
-                    .radius(20)
-                    .sampling(8)
-                    .async()
-                    .from(bitmap)
-                    .into(imageView);
 
-            imageView.setAlpha(0f);
-            imageView.setScaleX(2f);
-            imageView.setScaleY(2f);
-            imageView.setVisibility(View.VISIBLE);
-            imageView.animate()
-                    .alpha(1)
-                    .setDuration(500L)
-                    .setInterpolator(new FastOutSlowInInterpolator())
-                    .start();
-            imageView.animate()
-                    .scaleX(1)
-                    .scaleY(1)
-                    .setDuration(15_000L)
-                    .setInterpolator(new FastOutSlowInInterpolator())
-                    .start();
-            return true;
+            if (doOnEnd != null) {
+                doOnEnd.runOnBmp(bitmap);
+            }
+
+//            imageView.setAlpha(0f);
+//            imageView.setScaleX(2f);
+//            imageView.setScaleY(2f);
+//            imageView.setVisibility(View.VISIBLE);
+//            imageView.animate()
+//                    .alpha(1)
+//                    .setDuration(500L)
+//                    .setInterpolator(new FastOutSlowInInterpolator())
+//                    .start();
+//            imageView.animate()
+//                    .scaleX(1)
+//                    .scaleY(1)
+//                    .setDuration(15_000L)
+//                    .setInterpolator(new FastOutSlowInInterpolator())
+//                    .start();
+            {
+                return true;
+            }
         }
 
         // If it's not in memory, create an async task to load it. This task will be attached
         // via AsyncDrawable to this view.
-        final LoaderTaskSoft task = new LoaderTaskSoft(imageView, prgView, false, blurOnEnd);
+        final LoaderTaskSoft task = new LoaderTaskSoft(imageView, prgView, false, doOnEnd);
         final AsyncDrawableSoft asyncDrawable = new AsyncDrawableSoft(imageView.getResources(), placeholderBitmap,
                 task);
-        imageView.setVisibility(View.INVISIBLE);
+//        imageView.setVisibility(View.INVISIBLE);
         imageView.setImageDrawable(asyncDrawable);
 
         // Run the task on our foreground executor
@@ -647,6 +639,7 @@ public class CachedAppAssetLoader {
     }
 
     public interface BitmapLoadListener {
+
         void onBitmapLoadSuccess(Bitmap bitmap);
     }
 }

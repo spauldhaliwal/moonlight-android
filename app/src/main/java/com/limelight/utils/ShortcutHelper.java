@@ -2,19 +2,15 @@ package com.limelight.utils;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
-import android.content.Intent;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
 import android.os.Build;
-
-import com.limelight.AppView;
-import com.limelight.ShortcutTrampoline;
 import com.limelight.R;
+import com.limelight.data.remote.igdb.IgdbGameModel;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
-
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -22,15 +18,16 @@ import java.util.List;
 public class ShortcutHelper {
 
     private final ShortcutManager sm;
+
     private final Activity context;
+
     private final TvChannelHelper tvChannelHelper;
 
     public ShortcutHelper(Activity context) {
         this.context = context;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
             sm = context.getSystemService(ShortcutManager.class);
-        }
-        else {
+        } else {
             sm = null;
         }
         this.tvChannelHelper = new TvChannelHelper(context);
@@ -90,8 +87,7 @@ public class ShortcutHelper {
         }
     }
 
-    public void reportGameAdded(ComputerDetails computer, NvApp app) {
-        tvChannelHelper.createTvChannel(computer);
+    public void addGameToChannel(ComputerDetails computer, NvApp app) {
         tvChannelHelper.addGameToChannel(computer, app);
     }
 
@@ -109,6 +105,10 @@ public class ShortcutHelper {
 
     public void addGamesToChannel(ComputerDetails computer, List<NvApp> apps) {
         tvChannelHelper.addGamesToChannel(computer, apps);
+    }
+
+    public void updateOrAddGameInChannel(ComputerDetails computer, NvApp app, IgdbGameModel gameMetaData) {
+        tvChannelHelper.updateGameInChannel(computer, app, gameMetaData);
     }
 
     public void createAppViewShortcut(ComputerDetails computer, boolean forceAdd, boolean newlyPaired) {
@@ -148,6 +148,10 @@ public class ShortcutHelper {
         }
     }
 
+    public void createTvChannel(ComputerDetails computer) {
+        tvChannelHelper.createTvChannel(computer);
+    }
+
     public void createAppViewShortcutForOnlineHost(ComputerDetails details) {
         createAppViewShortcut(details, false, false);
     }
@@ -168,10 +172,10 @@ public class ShortcutHelper {
             }
 
             ShortcutInfo sInfo = new ShortcutInfo.Builder(context, getShortcutIdForGame(computer, app))
-                .setIntent(ServerHelper.createAppShortcutIntent(context, computer, app))
-                .setShortLabel(app.getAppName() + " (" + computer.name + ")")
-                .setIcon(appIcon)
-                .build();
+                    .setIntent(ServerHelper.createAppShortcutIntent(context, computer, app))
+                    .setShortLabel(app.getAppName() + " (" + computer.name + ")")
+                    .setIcon(appIcon)
+                    .build();
 
             return sm.requestPinShortcut(sInfo, null);
         } else {

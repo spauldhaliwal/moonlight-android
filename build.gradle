@@ -17,3 +17,15 @@ allprojects {
         google()
     }
 }
+
+ext {
+    daggerVersion = '2.24'
+    room_version = '2.2.0'
+    archLifecycle_version = '2.2.0-alpha03'
+    androidxArch_version = '2.0.0'
+    coroutines_version = '1.3.2'
+    nav_version = "2.1.0"
+    moshi_version = "1.8.0"
+    retrofit2_version = "2.6.1"
+    okhttp3_version = "4.2.0"
+}

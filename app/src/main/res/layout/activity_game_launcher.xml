@@ -15,7 +15,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:scaleType="centerCrop"
-        android:visibility="invisible"
+        android:transitionName="game_loader_bg_transition"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -25,7 +25,9 @@
         android:id="@+id/activityGameLoader_bgOverlay_frameLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#59000000" />
+        android:background="#59000000"
+        android:transitionName="game_loader_bg_overlay_transition"
+        android:visibility="visible" />
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/activityGameLoader_poster_layout"
@@ -53,13 +55,25 @@
             android:layout_height="0dp"
             android:background="@drawable/rounded_corner_background"
             android:elevation="40dp"
-            android:foreground="@drawable/rounded_gradient_overlay_text_bottom"
             android:scaleType="fitXY"
+            android:transitionName="game_loader_poster_transition"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             tools:background="@drawable/rounded_corner_background_white" />
+
+        <FrameLayout
+            android:id="@+id/activityGameLoader_poster_overlay_frameLayout"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:background="@drawable/rounded_gradient_overlay_text_bottom"
+            android:elevation="40dp"
+            android:transitionName="game_loader_poster_overlay_transition"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
         <TextView
             android:id="@+id/activityGameLoader_status_textView"
@@ -70,11 +84,12 @@
             android:elevation="40dp"
             android:fontFamily="@font/metropolis_medium"
             android:text=" "
-            tools:text="Connecting"
             android:textColor="@color/white"
             android:textSize="12sp"
+            android:transitionName="game_loader_progress_description_transition"
             app:layout_constraintBottom_toBottomOf="@+id/activityGameLoader_poster_imageView"
-            app:layout_constraintStart_toStartOf="parent" />
+            app:layout_constraintStart_toStartOf="parent"
+            tools:text="Connecting" />
 
         <ProgressBar
             android:id="@+id/activityGameLoader_status_progressBar"
@@ -83,11 +98,12 @@
             android:layout_marginStart="8dp"
             android:elevation="40dp"
             android:indeterminateTint="@color/white"
+            android:transitionName="game_loader_progress_transition"
             android:visibility="gone"
-            tools:visibility="visible"
             app:layout_constraintBottom_toBottomOf="@+id/activityGameLoader_status_textView"
             app:layout_constraintStart_toEndOf="@+id/activityGameLoader_status_textView"
-            app:layout_constraintTop_toTopOf="@+id/activityGameLoader_status_textView" />
+            app:layout_constraintTop_toTopOf="@+id/activityGameLoader_status_textView"
+            tools:visibility="visible" />
 
 
     </androidx.constraintlayout.widget.ConstraintLayout>

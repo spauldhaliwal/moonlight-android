@@ -11,7 +11,6 @@ import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.drawable.BitmapDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -21,15 +20,19 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.core.app.ActivityOptionsCompat;
+import androidx.core.util.Pair;
+import androidx.core.view.ViewCompat;
+import androidx.interpolator.view.animation.FastOutLinearInInterpolator;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 import com.limelight.computers.ComputerManagerListener;
 import com.limelight.computers.ComputerManagerService;
 import com.limelight.grid.assets.CachedAppAssetLoader;
-import com.limelight.grid.assets.CachedAppAssetLoader.BitmapLoadListener;
 import com.limelight.grid.assets.DiskAssetLoader;
 import com.limelight.grid.assets.MemoryAssetLoader;
 import com.limelight.grid.assets.NetworkAssetLoader;
@@ -37,6 +40,7 @@ import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
 import com.limelight.nvstream.http.PairingManager;
 import com.limelight.nvstream.wol.WakeOnLanSender;
+import com.limelight.utils.BitmapRunnable;
 import com.limelight.utils.Dialog;
 import com.limelight.utils.ServerHelper;
 import com.limelight.utils.SpinnerDialog;
@@ -44,8 +48,19 @@ import com.limelight.utils.UiHelper;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.UUID;
+import jp.wasabeef.blurry.Blurry;
 
-public class ShortcutTrampoline extends Activity {
+public class GameLauncher extends Activity {
+
+    private ImageView bgImageViewStaticBlur;
+
+    private FrameLayout bgOverlay;
+
+    private FrameLayout posterOverlay;
+
+    private ProgressBar posterProgressBar;
+
+    private ImageView posterView;
 
     private ProgressBar statusProgress;
 
@@ -75,7 +90,7 @@ public class ShortcutTrampoline extends Activity {
 
     private static final int LARGE_WIDTH_DP = 150;
 
-    private static final long LOADING_DELAY = 7_500L;
+    private static final long LOADING_DELAY = 1_500L;
 
     private Bitmap posterBitmap;
 
@@ -99,7 +114,7 @@ public class ShortcutTrampoline extends Activity {
 
                     if (computer == null) {
                         setStatusMessage(getResources().getString(R.string.conn_error_title));
-                        Dialog.displayDialog(ShortcutTrampoline.this,
+                        Dialog.displayDialog(GameLauncher.this,
                                 getResources().getString(R.string.conn_error_title),
                                 getResources().getString(R.string.scut_pc_not_found),
                                 true);
@@ -127,7 +142,7 @@ public class ShortcutTrampoline extends Activity {
                         @Override
                         public void notifyComputerUpdated(final ComputerDetails details) {
                             // Don't care about other computers
-                            Log.d("ShortcutTrampoline", "computer updated");
+                            Log.d("GameLauncher", "computer updated");
                             if (!details.uuid.equalsIgnoreCase(uuidString)) {
                                 return;
                             }
@@ -153,14 +168,14 @@ public class ShortcutTrampoline extends Activity {
                                                 && details.pairState == PairingManager.PairState.PAIRED) {
                                             setStatusMessage("Launching");
                                             wakingUpComputer = false;
-                                            Log.d("ShortcutTrampoline", "computer online and paired");
+                                            Log.d("GameLauncher", "computer online and paired");
 
                                             // Launch game if provided app ID, otherwise launch app view
                                             if (app != null) {
                                                 if (details.runningGameId == 0 || details.runningGameId == app
                                                         .getAppId()) {
                                                     intentStack.add(ServerHelper
-                                                            .createStartIntent(ShortcutTrampoline.this, app, details,
+                                                            .createStartIntent(GameLauncher.this, app, details,
                                                                     managerBinder));
 
                                                     // Close this activity
@@ -172,10 +187,10 @@ public class ShortcutTrampoline extends Activity {
                                                     // Create the start intent immediately, so we can safely unbind the managerBinder
                                                     // below before we return.
                                                     final Intent startIntent = ServerHelper
-                                                            .createStartIntent(ShortcutTrampoline.this, app, details,
+                                                            .createStartIntent(GameLauncher.this, app, details,
                                                                     managerBinder);
 
-                                                    UiHelper.displayQuitConfirmationDialog(ShortcutTrampoline.this,
+                                                    UiHelper.displayQuitConfirmationDialog(GameLauncher.this,
                                                             new Runnable() {
                                                                 @Override
                                                                 public void run() {
@@ -201,7 +216,7 @@ public class ShortcutTrampoline extends Activity {
 
                                                 // Add the PC view at the back (and clear the task)
                                                 Intent i;
-                                                i = new Intent(ShortcutTrampoline.this, PcView.class);
+                                                i = new Intent(GameLauncher.this, PcView.class);
                                                 i.setAction(Intent.ACTION_MAIN);
                                                 i.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK
                                                         | Intent.FLAG_ACTIVITY_NEW_TASK);
@@ -209,13 +224,13 @@ public class ShortcutTrampoline extends Activity {
 
                                                 // Take this intent's data and create an intent to start the app view
                                                 i = new Intent(getIntent());
-                                                i.setClass(ShortcutTrampoline.this, AppView.class);
+                                                i.setClass(GameLauncher.this, AppView.class);
                                                 intentStack.add(i);
 
                                                 // If a game is running, we'll make the stream the top level activity
                                                 if (details.runningGameId != 0) {
                                                     intentStack.add(ServerHelper
-                                                            .createStartIntent(ShortcutTrampoline.this,
+                                                            .createStartIntent(GameLauncher.this,
                                                                     new NvApp(null, details.runningGameId, false),
                                                                     details, managerBinder));
                                                 }
@@ -232,7 +247,7 @@ public class ShortcutTrampoline extends Activity {
                                             managerBinder.invalidateStateForComputer(computer.uuid);
                                         } else if (details.pairState != PairingManager.PairState.PAIRED) {
                                             // Computer not paired - display an error dialog
-                                            Dialog.displayDialog(ShortcutTrampoline.this,
+                                            Dialog.displayDialog(GameLauncher.this,
                                                     getResources().getString(R.string.conn_error_title),
                                                     getResources().getString(R.string.scut_not_paired),
                                                     true);
@@ -262,7 +277,7 @@ public class ShortcutTrampoline extends Activity {
     protected boolean validateInput(String uuidString, String appIdString) {
         // Validate UUID
         if (uuidString == null) {
-            Dialog.displayDialog(ShortcutTrampoline.this,
+            Dialog.displayDialog(GameLauncher.this,
                     getResources().getString(R.string.conn_error_title),
                     getResources().getString(R.string.scut_invalid_uuid),
                     true);
@@ -272,7 +287,7 @@ public class ShortcutTrampoline extends Activity {
         try {
             UUID.fromString(uuidString);
         } catch (IllegalArgumentException ex) {
-            Dialog.displayDialog(ShortcutTrampoline.this,
+            Dialog.displayDialog(GameLauncher.this,
                     getResources().getString(R.string.conn_error_title),
                     getResources().getString(R.string.scut_invalid_uuid),
                     true);
@@ -284,7 +299,7 @@ public class ShortcutTrampoline extends Activity {
             try {
                 Integer.parseInt(appIdString);
             } catch (NumberFormatException ex) {
-                Dialog.displayDialog(ShortcutTrampoline.this,
+                Dialog.displayDialog(GameLauncher.this,
                         getResources().getString(R.string.conn_error_title),
                         getResources().getString(R.string.scut_invalid_app_id),
                         true);
@@ -310,11 +325,29 @@ public class ShortcutTrampoline extends Activity {
     }
 
     private void startStream() {
+        statusProgress.animate()
+                .alpha(0f)
+                .setStartDelay(1_000)
+                .setDuration(200)
+                .setInterpolator(new FastOutLinearInInterpolator())
+                .start();
+
         new Handler().postDelayed(new Runnable() {
             @Override
             public void run() {
                 if (!gameCancelled) {
-                    startActivities(intentStack.toArray(new Intent[]{}));
+                    Intent intent = intentStack.get(0);
+                    ActivityOptionsCompat options = ActivityOptionsCompat
+                            .makeSceneTransitionAnimation(GameLauncher.this,
+                                    Pair.create((View) posterView, ViewCompat.getTransitionName(posterView)),
+                                    Pair.create((View) statusProgress, ViewCompat.getTransitionName(statusProgress)),
+                                    Pair.create((View) statusMessageTextView,
+                                            ViewCompat.getTransitionName(statusMessageTextView)),
+                                    Pair.create((View) posterOverlay, ViewCompat.getTransitionName(posterOverlay)),
+                                    Pair.create((View) bgImageViewStaticBlur,
+                                            ViewCompat.getTransitionName(bgImageViewStaticBlur)),
+                                    Pair.create((View) bgOverlay, ViewCompat.getTransitionName(bgOverlay)));
+                    startActivity(intent, options.toBundle());
                 }
             }
         }, LOADING_DELAY);
@@ -348,7 +381,7 @@ public class ShortcutTrampoline extends Activity {
         }
 
         // Inflate the content
-        setContentView(R.layout.activity_game_loader);
+        setContentView(R.layout.activity_game_launcher);
 //        blurLayout = findViewById(R.id.blurLayout);
 
 //        UiHelper.notifyNewRootView(this);
@@ -369,6 +402,11 @@ public class ShortcutTrampoline extends Activity {
             statusProgress = findViewById(R.id.activityGameLoader_status_progressBar);
 
             statusMessageTextView = findViewById(R.id.activityGameLoader_status_textView);
+
+            posterView = findViewById(R.id.activityGameLoader_poster_imageView);
+            posterOverlay = findViewById(R.id.activityGameLoader_poster_overlay_frameLayout);
+            bgOverlay = findViewById(R.id.activityGameLoader_bgOverlay_frameLayout);
+            posterView.setClipToOutline(true);
 
             setStatusMessage(getResources().getString(R.string.conn_establishing_title));
 
@@ -434,20 +472,36 @@ public class ShortcutTrampoline extends Activity {
                 new DiskAssetLoader(this),
                 BitmapFactory.decodeResource(this.getResources(), R.drawable.no_app_image));
 
-        final ImageView posterView = findViewById(R.id.activityGameLoader_poster_imageView);
-        posterView.setClipToOutline(true);
-        final ImageView bgImageViewStaticBlur = findViewById(R.id.activityGameLoader_bg_imageView);
-        final ProgressBar posterProgressBar = findViewById(R.id.activityGameLoader_poster_progressBar);
+        bgImageViewStaticBlur = findViewById(R.id.activityGameLoader_bg_imageView);
+        posterProgressBar = findViewById(R.id.activityGameLoader_poster_progressBar);
 
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 loader.populateImageView(app, posterView, posterProgressBar);
-                loader.populateImageViewSoft(app, bgImageViewStaticBlur, posterProgressBar, true);
+                bgImageViewStaticBlur.setAlpha(0f);
+                loader.populateImageViewSoft(app, bgImageViewStaticBlur, posterProgressBar,
+                        new BitmapRunnable() {
+
+                            @Override
+                            public void runOnBmp(final Bitmap bmp) {
+                                Blurry.with(bgImageViewStaticBlur.getContext())
+                                        .radius(20)
+                                        .sampling(8)
+                                        .async()
+                                        .from(bmp)
+                                        .into(bgImageViewStaticBlur);
+
+                                bgImageViewStaticBlur.animate()
+                                        .alpha(1f)
+                                        .setDuration(500L)
+                                        .setInterpolator(new FastOutLinearInInterpolator())
+                                        .start();
+                            }
+                        });
             }
         });
     }
-
 
     private void bindService() {
         bindService(new Intent(this, ComputerManagerService.class), serviceConnection,
@@ -504,13 +558,13 @@ public class ShortcutTrampoline extends Activity {
     private void doWakeOnLan(final ComputerDetails computer) {
         setStatusMessage("Waking up PC");
         if (computer.state == ComputerDetails.State.ONLINE) {
-            Toast.makeText(ShortcutTrampoline.this, getResources().getString(R.string.wol_pc_online),
+            Toast.makeText(GameLauncher.this, getResources().getString(R.string.wol_pc_online),
                     Toast.LENGTH_SHORT).show();
             return;
         }
 
         if (computer.macAddress == null) {
-            Toast.makeText(ShortcutTrampoline.this, getResources().getString(R.string.wol_no_mac), Toast.LENGTH_SHORT)
+            Toast.makeText(GameLauncher.this, getResources().getString(R.string.wol_no_mac), Toast.LENGTH_SHORT)
                     .show();
             return;
         }

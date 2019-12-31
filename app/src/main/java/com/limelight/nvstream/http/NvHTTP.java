@@ -1,6 +1,11 @@
 package com.limelight.nvstream.http;
 
-import android.util.Log;
+import com.limelight.BuildConfig;
+import com.limelight.LimeLog;
+import com.limelight.MoonlightApplication;
+import com.limelight.nvstream.ConnectionContext;
+import com.limelight.nvstream.http.PairingManager.PairState;
+import com.limelight.preferences.PreferenceConfiguration;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,7 +28,6 @@ import java.util.ListIterator;
 import java.util.Stack;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
@@ -32,23 +36,15 @@ import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509KeyManager;
 import javax.net.ssl.X509TrustManager;
-
-import org.xmlpull.v1.XmlPullParser;
-import org.xmlpull.v1.XmlPullParserException;
-import org.xmlpull.v1.XmlPullParserFactory;
-
-import com.limelight.BuildConfig;
-import com.limelight.LimeLog;
-import com.limelight.nvstream.ConnectionContext;
-import com.limelight.nvstream.http.PairingManager.PairState;
-
 import okhttp3.ConnectionPool;
 import okhttp3.Handshake;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-
+import org.xmlpull.v1.XmlPullParser;
+import org.xmlpull.v1.XmlPullParserException;
+import org.xmlpull.v1.XmlPullParserFactory;
 
 public class NvHTTP {
     private String uniqueId;
@@ -64,7 +60,7 @@ public class NvHTTP {
 
     public String baseUrlHttps;
     public String baseUrlHttp;
-    
+
     private OkHttpClient httpClient;
     private OkHttpClient httpClientWithReadTimeout;
         
@@ -537,19 +533,24 @@ public class NvHTTP {
         
         // Ensure that all apps in the list are initialized
         // Remove any apps that don't end with _shield (removes duplicate entries)
+        PreferenceConfiguration prefConfig = PreferenceConfiguration.readPreferences(MoonlightApplication.Companion.applicationContext());
+
         ListIterator<NvApp> i = appList.listIterator();
         while (i.hasNext()) {
             NvApp app = i.next();
             
             // Remove uninitialized apps
-            if (!app.isInitialized() || !app.getAppName().contains("_shield")) {
+            if (!app.isInitialized()) {
+                i.remove();
+            }
+
+            if (prefConfig.onlyImportGamesWithShield && !app.getAppName().contains("_shield")) {
                 LimeLog.warning("GFE returned incomplete app: "+app.getAppId()+" "+app.getAppName());
                 i.remove();
-                // Remove _shield from app titles
             } else if (app.getAppName().contains("_shield")) {
                 app.setAppName(app.getAppName().replace("_shield",""));
-                app.setAppName(app.getAppName().replace(" - ",": "));
             }
+            app.setAppName(app.getAppName().replace(" - ", ": "));
         }
         
         return appList;

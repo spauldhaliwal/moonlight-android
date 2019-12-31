@@ -26,6 +26,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 import com.limelight.computers.ComputerManagerListener;
 import com.limelight.computers.ComputerManagerService;
+import com.limelight.data.remote.igdb.GameMetadataCacheRepository;
+import com.limelight.data.remote.igdb.IgdbApiFactory;
+import com.limelight.data.remote.igdb.IgdbGameModel;
+import com.limelight.data.remote.igdb.IgdbGameSearchApi;
+import com.limelight.data.remote.igdb.IgdbGamesRepository;
 import com.limelight.grid.AppGridAdapter;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
@@ -88,6 +93,12 @@ public class AppView extends Activity implements AdapterFragmentCallbacks {
     public final static String NEW_PAIR_EXTRA = "NewPair";
 
     private ComputerManagerService.ComputerManagerBinder managerBinder;
+
+    private IgdbGamesRepository igdbGamesRepository = new IgdbGamesRepository(
+            new IgdbGameSearchApi(IgdbApiFactory.INSTANCE.getIgdbGameSearchEndpoint()));
+
+    private GameMetadataCacheRepository igdbGamesCacheRepository = IgdbApiFactory.INSTANCE
+            .getMetaDataCacheRepository();
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         public void onServiceConnected(ComponentName className, IBinder binder) {
@@ -263,6 +274,7 @@ public class AppView extends Activity implements AdapterFragmentCallbacks {
                 try {
                     List<NvApp> appList = NvHTTP.getAppListByReader(new StringReader(details.rawAppList));
                     updateUiWithAppList(appList);
+                    fetchGameExtraMetadata(appList);
                     updateUiWithServerinfo(details);
 
                     if (blockingLoadSpinner != null) {
@@ -331,6 +343,7 @@ public class AppView extends Activity implements AdapterFragmentCallbacks {
                     .readInputStreamToString(CacheHelper.openCacheFileForInput(getCacheDir(), "applist", uuidString));
             List<NvApp> appList = NvHTTP.getAppListByReader(new StringReader(lastRawApplist));
             updateUiWithAppList(appList);
+            fetchGameExtraMetadata(appList);
             LimeLog.info("Loaded appList from cache");
         } catch (IOException | XmlPullParserException e) {
             if (lastRawApplist != null) {
@@ -528,7 +541,6 @@ public class AppView extends Activity implements AdapterFragmentCallbacks {
                     }
                 });
                 shortcutHelper.removeGamesFromChannel(computer, appList);
-                shortcutHelper.addGamesToChannel(computer, appList);
             }
         }).start();
 
@@ -563,6 +575,7 @@ public class AppView extends Activity implements AdapterFragmentCallbacks {
                         appGridAdapter.addApp(new AppObject(app));
                         updated = true;
                     }
+
                 }
 
                 // Next handle app removals
@@ -599,6 +612,45 @@ public class AppView extends Activity implements AdapterFragmentCallbacks {
                 }
             }
         });
+    }
+
+    public void fetchGameExtraMetadata(List<NvApp> gameList) {
+        // next download extra metadata from igdb and store in cache
+        new Thread(() -> {
+            for (NvApp app : gameList) {
+
+                if (app.getAppName().equals("Steam")) {
+                    shortcutHelper.addGameToChannel(computer, app);
+                    return;
+                }
+
+                IgdbGameModel cachedMetaData = igdbGamesCacheRepository.getGameMetadata(app);
+
+                if (cachedMetaData == null) {
+                    // No meta data for this game exists. Fetching online...
+
+                    List<IgdbGameModel> gameMetaDataList = igdbGamesRepository.searchGamesAsync(app.getAppName());
+                    if (!gameMetaDataList.isEmpty()) {
+                        // Successfully retrieved metadata online. Now storing to cache...
+                        IgdbGameModel gameMetaData = gameMetaDataList.get(0);
+
+                        Log.d("AppView", "game with name " + gameMetaData.getName() + " doesn't exist in cache");
+                        igdbGamesCacheRepository.saveGameMetaData(app, gameMetaData);
+
+                        //Updating program in channel...
+                        shortcutHelper.updateOrAddGameInChannel(computer, app, gameMetaData);
+
+                    } else {
+                        // Error fetching metadata. Adding game to channel without extra data
+                        shortcutHelper.addGameToChannel(computer, app);
+                    }
+                } else {
+                    // Meta data for this game exists. Updating program in channel...
+                    shortcutHelper.updateOrAddGameInChannel(computer, app, cachedMetaData);
+                }
+            }
+        }).start();
+
     }
 
     @Override

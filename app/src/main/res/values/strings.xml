@@ -189,5 +189,9 @@
     <string name="summary_enable_hdr">Stream HDR when the game and PC GPU support it. HDR requires a GTX 1000 series GPU or later.</string>
     <string name="title_enable_perf_overlay">Enable performance overlay</string>
     <string name="summary_enable_perf_overlay">Display an on-screen overlay with real-time performance information while streaming</string>
+    <string name="summary_only_import_shield_games">Only games where the title ends with _shield will be added. Used to exclude default games added to Gamestream</string>
+    <string name="title_only_import_shield_games">Only import games which end with _shield</string>
+    <string name="title_activity_game_fragment">GameActivityFragment</string>
+    <string name="action_settings">Settings</string>
 
 </resources>

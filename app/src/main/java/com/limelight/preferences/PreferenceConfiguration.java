@@ -38,6 +38,7 @@ public class PreferenceConfiguration {
     static final String UNLOCK_FPS_STRING = "checkbox_unlock_fps";
     private static final String VIBRATE_OSC_PREF_STRING = "checkbox_vibrate_osc";
     private static final String VIBRATE_FALLBACK_PREF_STRING = "checkbox_vibrate_fallback";
+    private static final String ONLY_IMPORT_GAMES_WITH_SHIELD = "checkbox_enable_shield_only_import";
 
     static final String DEFAULT_RESOLUTION = "720p";
     static final String DEFAULT_FPS = "60";
@@ -65,6 +66,8 @@ public class PreferenceConfiguration {
     private static final boolean DEFAULT_VIBRATE_OSC = true;
     private static final boolean DEFAULT_VIBRATE_FALLBACK = false;
 
+    private static final boolean DEFAULT_ONLY_IMPORT_GAMES_WITH_SHIELD = false;
+
     public static final int FORCE_H265_ON = -1;
     public static final int AUTOSELECT_H265 = 0;
     public static final int FORCE_H265_OFF = 1;
@@ -88,6 +91,7 @@ public class PreferenceConfiguration {
     public boolean unlockFps;
     public boolean vibrateOsc;
     public boolean vibrateFallbackToDevice;
+    public boolean onlyImportGamesWithShield;
 
     private static int getHeightFromResolutionString(String resString) {
         if (resString.equalsIgnoreCase("360p")) {
@@ -341,6 +345,7 @@ public class PreferenceConfiguration {
         config.unlockFps = prefs.getBoolean(UNLOCK_FPS_STRING, DEFAULT_UNLOCK_FPS);
         config.vibrateOsc = prefs.getBoolean(VIBRATE_OSC_PREF_STRING, DEFAULT_VIBRATE_OSC);
         config.vibrateFallbackToDevice = prefs.getBoolean(VIBRATE_FALLBACK_PREF_STRING, DEFAULT_VIBRATE_FALLBACK);
+        config.onlyImportGamesWithShield = prefs.getBoolean(ONLY_IMPORT_GAMES_WITH_SHIELD, DEFAULT_ONLY_IMPORT_GAMES_WITH_SHIELD);
 
         return config;
     }

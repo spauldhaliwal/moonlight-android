@@ -1,5 +1,24 @@
 package com.limelight.utils;
 
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_BROWSABLE;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_CHANNEL_ID;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_INTENT_URI;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_INTERNAL_PROVIDER_ID;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_POSTER_ART_ASPECT_RATIO;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_RELEASE_DATE;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_REVIEW_RATING;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_REVIEW_RATING_STYLE;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_TITLE;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_TYPE;
+import static android.media.tv.TvContract.PreviewPrograms.COLUMN_WEIGHT;
+import static android.media.tv.TvContract.PreviewPrograms.CONTENT_URI;
+import static android.media.tv.TvContract.PreviewPrograms.REVIEW_RATING_STYLE_PERCENTAGE;
+import static android.media.tv.TvContract.PreviewPrograms.REVIEW_RATING_STYLE_STARS;
+import static android.media.tv.TvContract.PreviewPrograms.REVIEW_RATING_STYLE_THUMBS_UP_DOWN;
+import static android.media.tv.TvContract.PreviewPrograms._ID;
+
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
@@ -16,6 +35,7 @@ import android.media.tv.TvContract;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.BaseColumns;
+import android.util.Log;
 import androidx.tvprovider.media.tv.TvContractCompat;
 import androidx.tvprovider.media.tv.TvContractCompat.PreviewProgramColumns;
 import androidx.tvprovider.media.tv.TvContractCompat.WatchNextPrograms;
@@ -23,10 +43,13 @@ import androidx.tvprovider.media.tv.WatchNextProgram;
 import com.limelight.LimeLog;
 import com.limelight.PosterContentProvider;
 import com.limelight.R;
+import com.limelight.data.remote.igdb.IgdbGameModel;
 import com.limelight.nvstream.http.ComputerDetails;
 import com.limelight.nvstream.http.NvApp;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 
 public class TvChannelHelper {
@@ -72,6 +95,7 @@ public class TvChannelHelper {
     }
 
     void createTvChannel(ComputerDetails computer) {
+        Log.d("TvChannelHelper", "creating channel");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!isAndroidTV()) {
                 return;
@@ -148,10 +172,56 @@ public class TvChannelHelper {
                     .setIntent(ServerHelper.createAppShortcutIntent(context, computer, app))
                     .setInternalProviderId("" + app.getAppId());
 
-            context.getContentResolver().insert(TvContract.PreviewPrograms.CONTENT_URI,
+            context.getContentResolver().insert(CONTENT_URI,
                     builder.toContentValues());
 
             TvContract.requestChannelBrowsable(context, channelId);
+        }
+    }
+
+    void updateGameInChannel(ComputerDetails computer, NvApp app, IgdbGameModel gameMetaData) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!isAndroidTV()) {
+                return;
+            }
+
+            Log.d("updateGameInChannel", "app name: " + app.getAppName());
+
+            if (app.getAppName().equals("Steam")) {
+                return;
+            }
+
+            Long channelId = getChannelId(computer.uuid);
+            if (channelId == null) {
+                return;
+            }
+
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy");
+            String releaseYear = sdf.format(new Date((long) gameMetaData.getFirst_release_date() * 1_000L));
+
+            PreviewProgramBuilder builder = new PreviewProgramBuilder()
+                    .setChannelId(channelId)
+                    .setType(TYPE_GAME)
+                    .setTitle(gameMetaData.getName())
+                    .setDescription(gameMetaData.getSummary())
+                    .setReleaseDate(releaseYear)
+                    .setReviewRating(String.valueOf(gameMetaData.getTotal_rating() / 20))
+                    .setReviewRatingStyle(REVIEW_RATING_STYLE_STARS)
+                    .setPosterArtAspectRatio(ASPECT_RATIO_MOVIE_POSTER)
+                    .setPosterArtUri(PosterContentProvider.createBoxArtUri(computer.uuid, "" + app.getAppId()))
+                    .setIntent(ServerHelper.createAppShortcutIntent(context, computer, app))
+                    .setInternalProviderId("" + app.getAppId());
+
+            Long programId = getProgramId(channelId, "" + app.getAppId());
+
+            if (programId != null) {
+                context.getContentResolver().update(TvContract.buildPreviewProgramUri(programId),
+                        builder.toContentValues(), null, null);
+            } else {
+                Log.d("updateOrAddGameInChannel", "couldn't find game in channel to update. Inserting new entry");
+                context.getContentResolver().insert(CONTENT_URI,
+                        builder.toContentValues());
+            }
         }
     }
 
@@ -283,8 +353,8 @@ public class TvChannelHelper {
     private Long getProgramId(long channelId, String appId) {
         try (Cursor cursor = context.getContentResolver().query(
                 TvContract.buildPreviewProgramsUriForChannel(channelId),
-                new String[]{TvContract.PreviewPrograms._ID, TvContract.PreviewPrograms.COLUMN_INTERNAL_PROVIDER_ID,
-                        TvContract.PreviewPrograms.COLUMN_BROWSABLE},
+                new String[]{_ID, COLUMN_INTERNAL_PROVIDER_ID,
+                        COLUMN_BROWSABLE},
                 null,
                 null,
                 null)) {
@@ -366,51 +436,75 @@ public class TvChannelHelper {
 
 
         public PreviewProgramBuilder setChannelId(Long channelId) {
-            mValues.put(TvContract.PreviewPrograms.COLUMN_CHANNEL_ID, channelId);
+            mValues.put(COLUMN_CHANNEL_ID, channelId);
             return this;
         }
 
         public PreviewProgramBuilder setType(int type) {
-            mValues.put(TvContract.PreviewPrograms.COLUMN_TYPE, type);
+            mValues.put(COLUMN_TYPE, type);
             return this;
         }
 
         public PreviewProgramBuilder setTitle(String title) {
-            mValues.put(TvContract.PreviewPrograms.COLUMN_TITLE, title);
+            mValues.put(COLUMN_TITLE, title);
             return this;
         }
+
         public PreviewProgramBuilder setDescription(String description) {
-            mValues.put(TvContract.PreviewPrograms.COLUMN_SHORT_DESCRIPTION, description);
+            mValues.put(COLUMN_SHORT_DESCRIPTION, description);
+            return this;
+        }
+
+        public PreviewProgramBuilder setReviewRating(String rating) {
+            mValues.put(COLUMN_REVIEW_RATING, rating);
+            return this;
+        }
+
+        public PreviewProgramBuilder setReviewRatingStyle(int ratingStyle) {
+            if (ratingStyle == REVIEW_RATING_STYLE_THUMBS_UP_DOWN) {
+                mValues.put(COLUMN_REVIEW_RATING_STYLE, REVIEW_RATING_STYLE_THUMBS_UP_DOWN);
+
+            } else if (ratingStyle == REVIEW_RATING_STYLE_PERCENTAGE) {
+                mValues.put(COLUMN_REVIEW_RATING_STYLE, REVIEW_RATING_STYLE_PERCENTAGE);
+
+            } else {
+                mValues.put(COLUMN_REVIEW_RATING_STYLE, REVIEW_RATING_STYLE_STARS);
+            }
+            return this;
+        }
+
+        public PreviewProgramBuilder setReleaseDate(String date) {
+            mValues.put(COLUMN_RELEASE_DATE, date);
             return this;
         }
 
         public PreviewProgramBuilder setPosterArtAspectRatio(int aspectRatio) {
-            mValues.put(TvContract.PreviewPrograms.COLUMN_POSTER_ART_ASPECT_RATIO, aspectRatio);
+            mValues.put(COLUMN_POSTER_ART_ASPECT_RATIO, aspectRatio);
             return this;
         }
 
         public PreviewProgramBuilder setIntent(Intent intent) {
-            mValues.put(TvContract.PreviewPrograms.COLUMN_INTENT_URI, toUriString(intent));
+            mValues.put(COLUMN_INTENT_URI, toUriString(intent));
             return this;
         }
 
         public PreviewProgramBuilder setIntentUri(Uri uri) {
-            mValues.put(TvContract.PreviewPrograms.COLUMN_INTENT_URI, toValueString(uri));
+            mValues.put(COLUMN_INTENT_URI, toValueString(uri));
             return this;
         }
 
         public PreviewProgramBuilder setInternalProviderId(String id) {
-            mValues.put(TvContract.PreviewPrograms.COLUMN_INTERNAL_PROVIDER_ID, id);
+            mValues.put(COLUMN_INTERNAL_PROVIDER_ID, id);
             return this;
         }
 
         public PreviewProgramBuilder setPosterArtUri(Uri uri) {
-            mValues.put(TvContract.PreviewPrograms.COLUMN_POSTER_ART_URI, toValueString(uri));
+            mValues.put(COLUMN_POSTER_ART_URI, toValueString(uri));
             return this;
         }
 
         public PreviewProgramBuilder setWeight(int weight) {
-            mValues.put(TvContract.PreviewPrograms.COLUMN_WEIGHT, weight);
+            mValues.put(COLUMN_WEIGHT, weight);
             return this;
         }
 

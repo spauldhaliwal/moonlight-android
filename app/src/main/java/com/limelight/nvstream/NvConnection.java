@@ -1,5 +1,7 @@
 package com.limelight.nvstream;
 
+import static com.limelight.Game.LOADING_DELAY;
+
 import android.app.ActivityManager;
 
 import java.io.IOException;
@@ -148,6 +150,7 @@ public class NvConnection {
         
         // If there's a game running, resume it
         if (h.getCurrentGame(serverInfo) != 0) {
+            LOADING_DELAY = 750L;
             try {
                 if (h.getCurrentGame(serverInfo) == app.getAppId()) {
                     if (!h.resumeApp(context)) {
